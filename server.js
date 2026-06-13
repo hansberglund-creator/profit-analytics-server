@@ -50,10 +50,20 @@ app.use('/shopify', (req, res) => {
 
   const options = { hostname: shop, path: req.url, method: req.method, headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } };
   const proxyReq = https.request(options, proxyRes => {
-    res.status(proxyRes.statusCode);
-    if (proxyRes.headers['link']) res.setHeader('link', proxyRes.headers['link']);
-    res.setHeader('content-type', proxyRes.headers['content-type'] || 'application/json');
-    proxyRes.pipe(res);
+    let body = '';
+    proxyRes.on('data', chunk => body += chunk);
+    proxyRes.on('end', () => {
+      try {
+        const data = JSON.parse(body);
+        // Inject link header into response body so browser can access it
+        if (proxyRes.headers['link']) {
+          data._link = proxyRes.headers['link'];
+        }
+        res.status(proxyRes.statusCode).json(data);
+      } catch(e) {
+        res.status(proxyRes.statusCode).send(body);
+      }
+    });
   });
   proxyReq.on('error', e => res.status(500).json({ error: e.message }));
   proxyReq.end();
