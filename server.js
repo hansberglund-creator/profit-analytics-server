@@ -74,23 +74,20 @@ app.get('/auth/callback', async (req, res) => {
 // Sync all orders from Shopify to DB
 async function syncAllOrders(shop, token) {
   console.log('Starting sync for', shop);
-  let pageInfo = null, first = true, total = 0;
+  let sinceId = null, total = 0;
   try {
-    while (first || pageInfo) {
-      first = false;
-      let path = '/admin/api/2024-01/orders.json?status=any&limit=250&order=created_at+asc';
-      if (pageInfo) path = `/admin/api/2024-01/orders.json?limit=250&page_info=${pageInfo}`;
-      const { body, link } = await shopifyGet(shop, token, path);
+    while (true) {
+      let path = '/admin/api/2024-01/orders.json?status=any&limit=250&order=id+asc';
+      if (sinceId) path += '&since_id=' + sinceId;
+      const { body } = await shopifyGet(shop, token, path);
       const data = JSON.parse(body);
       const orders = data.orders || [];
-      if (orders.length > 0) {
-        await upsertOrders(shop, orders);
-        total += orders.length;
-        console.log(`Synced ${total} orders for ${shop}`);
-        await pool.query('INSERT INTO sync_status (shop, last_synced_at, total_orders) VALUES ($1, NOW(), $2) ON CONFLICT (shop) DO UPDATE SET last_synced_at=NOW(), total_orders=$2', [shop, total]);
-      }
-      const nm = link.match(/page_info=([^>&"]+)[^>]*>;\s*rel="next"/);
-      pageInfo = nm ? nm[1] : null;
+      if (orders.length === 0) break;
+      await upsertOrders(shop, orders);
+      total += orders.length;
+      sinceId = orders[orders.length - 1].id;
+      console.log(`Synced ${total} orders for ${shop}`);
+      await pool.query('INSERT INTO sync_status (shop, last_synced_at, total_orders) VALUES ($1, NOW(), $2) ON CONFLICT (shop) DO UPDATE SET last_synced_at=NOW(), total_orders=$2', [shop, total]);
       if (orders.length < 250) break;
     }
     console.log('Sync complete for', shop, '- total:', total);
