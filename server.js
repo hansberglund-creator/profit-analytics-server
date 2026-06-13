@@ -73,9 +73,31 @@ app.use('/meta', (req, res) => {
   proxyReq.end();
 });
 
+app.get('/shop-timezone', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (!token) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const data = await httpsGet(shop, '/admin/api/2024-01/shop.json', token);
+    const shopData = JSON.parse(data);
+    res.json({ timezone: shopData.shop?.iana_timezone || 'Europe/Stockholm' });
+  } catch(e) {
+    res.json({ timezone: 'Europe/Stockholm' });
+  }
+});
+
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', connectedShops: Object.keys(tokenStore) });
 });
+
+function httpsGet(hostname, path, token) {
+  return new Promise((resolve, reject) => {
+    const options = { hostname, path, method: 'GET', headers: { 'X-Shopify-Access-Token': token } };
+    const req = https.request(options, res => { let raw = ''; res.on('data', c => raw += c); res.on('end', () => resolve(raw)); });
+    req.on('error', reject);
+    req.end();
+  });
+}
 
 function httpsPost(hostname, path, body) {
   return new Promise((resolve, reject) => {
