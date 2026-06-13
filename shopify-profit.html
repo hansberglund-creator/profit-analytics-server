@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profit Analytics</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e8eaf0;min-height:100vh;font-size:14px}
+header{background:#181c27;border-bottom:1px solid #2a3045;padding:0 20px;height:52px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
+.logo{font-size:15px;font-weight:600;color:#fff;flex-shrink:0}.logo span{color:#3b82f6}
+nav{display:flex;gap:2px;flex:1;overflow-x:auto}
+nav button{background:none;border:none;color:#6b7494;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:12px;white-space:nowrap}
+nav button.active{background:#1e2335;color:#e8eaf0}
+nav button:hover:not(.active){color:#e8eaf0}
+.hdr-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+main{padding:20px;max-width:1400px;margin:0 auto}
+.setup-card{background:#181c27;border:1px solid #2a3045;border-radius:12px;padding:32px;max-width:460px;margin:60px auto}
+.setup-card h2{font-size:20px;font-weight:600;margin-bottom:8px}
+.setup-card p{color:#6b7494;font-size:13px;margin-bottom:24px;line-height:1.6}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:11px;color:#6b7494;margin-bottom:5px;font-weight:500;text-transform:uppercase;letter-spacing:.5px}
+.field input{width:100%;background:#0f1117;border:1px solid #2a3045;border-radius:7px;padding:9px 11px;color:#e8eaf0;font-size:13px;outline:none}
+.field input:focus{border-color:#3b82f6}
+.btn-primary{width:100%;background:#3b82f6;color:#fff;border:none;padding:10px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer}
+.btn-primary:disabled{opacity:.5;cursor:default}
+.error-msg{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:7px;padding:11px;color:#ef4444;font-size:12px;margin-bottom:14px}
+.period-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
+.period-tabs{display:flex;background:#181c27;border:1px solid #2a3045;border-radius:7px;padding:3px;gap:2px}
+.period-tabs button{background:none;border:none;color:#6b7494;padding:4px 10px;border-radius:5px;cursor:pointer;font-size:12px}
+.period-tabs button.active{background:#1e2335;color:#e8eaf0}
+.date-inputs{display:flex;gap:6px;align-items:center;font-size:12px;color:#6b7494}
+.date-inputs input{background:#181c27;border:1px solid #2a3045;border-radius:5px;padding:5px 8px;color:#e8eaf0;font-size:12px;outline:none}
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.metric{background:#181c27;border:1px solid #2a3045;border-radius:9px;padding:14px}
+.metric-label{font-size:10px;color:#6b7494;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.metric-value{font-size:22px;font-weight:600;letter-spacing:-.4px}
+.metric-sub{font-size:10px;margin-top:3px;color:#6b7494}
+.green{color:#22c55e}.red{color:#ef4444}.white{color:#e8eaf0}.blue{color:#3b82f6}
+.section{background:#181c27;border:1px solid #2a3045;border-radius:9px;margin-bottom:14px}
+.section-header{padding:13px 18px;border-bottom:1px solid #2a3045;display:flex;align-items:center;justify-content:space-between}
+.section-header h3{font-size:13px;font-weight:600}
+.section-body{padding:16px}
+.pl-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #1e2335;font-size:13px}
+.pl-row:last-child{border-bottom:none}
+.pl-row.total{font-weight:600;font-size:14px;border-top:1px solid #2a3045;border-bottom:none;padding-top:10px;margin-top:3px}
+.pl-row.indent{padding-left:14px}
+.pl-label{color:#9ca3b8}.pl-row.total .pl-label{color:#e8eaf0}
+.chart-bar-wrap{display:flex;align-items:flex-end;gap:3px;height:100px}
+.chart-bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+.chart-bar{width:100%;border-radius:3px 3px 0 0;min-height:2px}
+.chart-label{font-size:9px;color:#6b7494;white-space:nowrap}
+.loading{text-align:center;padding:40px;color:#6b7494}
+.btn-sm{background:#1e2335;border:1px solid #2a3045;color:#e8eaf0;padding:4px 9px;border-radius:5px;font-size:11px;cursor:pointer}
+.btn-sm:hover{background:#2a3045}
+.btn-danger{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#ef4444}
+.btn-blue{background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.25);color:#3b82f6}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:10px;color:#6b7494;text-transform:uppercase;letter-spacing:.4px;padding:7px 11px;border-bottom:1px solid #2a3045}
+td{padding:9px 11px;font-size:12px;border-bottom:1px solid #1e2335}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#1e2335}
+.badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:500}
+.badge.green{background:rgba(34,197,94,.1);color:#22c55e}
+.badge.red{background:rgba(239,68,68,.1);color:#ef4444}
+.tab-content{display:none}.tab-content.active{display:block}
+.ci{background:#0f1117;border:1px solid #2a3045;border-radius:5px;padding:5px 8px;color:#e8eaf0;font-size:12px;outline:none}
+.ri{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #1e2335;font-size:11px}
+.ri:last-child{border-bottom:none}
+.ri label{color:#9ca3b8}
+.custom-item{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+.custom-item input{flex:1;background:#0f1117;border:1px solid #2a3045;border-radius:5px;padding:6px 9px;color:#e8eaf0;font-size:12px;outline:none}
+.custom-item select{background:#0f1117;border:1px solid #2a3045;border-radius:5px;padding:6px 7px;color:#e8eaf0;font-size:12px;outline:none}
+.custom-item .rm{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#ef4444;padding:5px 9px;border-radius:5px;cursor:pointer;font-size:11px}
+.dot{width:7px;height:7px;border-radius:50%;background:#6b7494;flex-shrink:0}
+.dot.green{background:#22c55e}
+@media(max-width:700px){.metrics-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Profit<span>Analytics</span></div>
+  <nav>
+    <button class="active" onclick="showTab('dashboard')">Dashboard</button>
+    <button onclick="showTab('products')">Produkter</button>
+    <button onclick="showTab('pl')">P&amp;L</button>
+    <button onclick="showTab('ltv')">LTV</button>
+    <button onclick="showTab('costs')">Kostnader</button>
+    <button onclick="showTab('moms')">Moms</button>
+    <button onclick="showTab('cogs')">COGS</button>
+    <button onclick="showTab('settings')">Inställningar</button>
+  </nav>
+  <div class="hdr-right" id="header-right">
+    <button class="btn-sm" onclick="showSetup()">Anslut Shopify</button>
+  </div>
+</header>
+
+<main>
+  <div id="setup-view">
+    <div class="setup-card">
+      <h2>Anslut din Shopify-butik</h2>
+      <p>Ange din butiks URL nedan.</p>
+      <div id="setup-error" style="display:none" class="error-msg"></div>
+      <div class="field">
+        <label>Shopify Store URL</label>
+        <input type="text" id="shop-url" placeholder="din-butik.myshopify.com" onkeydown="if(event.key==='Enter')connectShopify()">
+      </div>
+      <button class="btn-primary" id="connect-btn" onclick="connectShopify()">Anslut butik</button>
+    </div>
+  </div>
+
+  <div id="app-view" style="display:none">
+    <div class="period-bar">
+      <div class="period-tabs">
+        <button onclick="setPeriod('today',this)">Idag</button>
+        <button onclick="setPeriod('yesterday',this)">Igår</button>
+        <button class="active" onclick="setPeriod('7d',this)">7 dagar</button>
+        <button onclick="setPeriod('30d',this)">30 dagar</button>
+        <button onclick="setPeriod('month',this)">Denna månad</button>
+        <button onclick="setPeriod('custom',this)">Anpassad</button>
+      </div>
+      <div class="date-inputs" id="custom-dates" style="display:none">
+        <input type="date" id="date-from"> till <input type="date" id="date-to">
+        <button class="btn-sm" onclick="loadData()">Hämta</button>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span id="sync-status" style="font-size:11px;color:#6b7494"></span>
+        <button class="btn-sm" onclick="loadData()">↻ Synka</button>
+        <button class="btn-sm btn-blue" onclick="resyncAll()" title="Synka om alla ordrar från Shopify">⟳ Full sync</button>
+        <button class="btn-sm btn-danger" onclick="disconnect()">Koppla bort</button>
+      </div>
+    </div>
+
+    <div id="tab-dashboard" class="tab-content active">
+      <div id="error-banner" style="display:none" class="error-msg"></div>
+      <div id="loading-state" class="loading">Hämtar data...</div>
+      <div id="dashboard-data" style="display:none">
+        <div class="metrics-grid">
+          <div class="metric"><div class="metric-label">Total omsättning</div><div class="metric-value white" id="m-revenue">-</div><div class="metric-sub" id="m-orders">-</div></div>
+          <div class="metric"><div class="metric-label">Bruttovinst</div><div class="metric-value green" id="m-gross">-</div><div class="metric-sub" id="m-gross-margin">-</div></div>
+          <div class="metric"><div class="metric-label">Nettoresultat</div><div class="metric-value" id="m-net">-</div><div class="metric-sub" id="m-net-margin">-</div></div>
+          <div class="metric"><div class="metric-label">Totala kostnader</div><div class="metric-value red" id="m-costs">-</div><div class="metric-sub" id="m-cost-pct">-</div></div>
+          <div class="metric"><div class="metric-label">AOV</div><div class="metric-value white" id="m-aov">-</div></div>
+          <div class="metric"><div class="metric-label">ROAS</div><div class="metric-value blue" id="m-roas">-</div></div>
+        </div>
+        <div class="section">
+          <div class="section-header"><h3>Omsättning per dag</h3></div>
+          <div class="section-body"><div class="chart-bar-wrap" id="daily-chart"></div></div>
+        </div>
+        <div class="section">
+          <div class="section-header"><h3>Kostnadsnedbrytning</h3></div>
+          <div class="section-body">
+            <div class="pl-row"><span class="pl-label">Total omsättning</span><span id="bd-gross-rev">-</span></div>
+            <div class="pl-row indent"><span class="pl-label">– Returer</span><span class="red" id="bd-refunds">-</span></div>
+            <div class="pl-row indent"><span class="pl-label">– Moms</span><span class="red" id="bd-vat">-</span></div>
+            <div class="pl-row indent"><span class="pl-label">– Shopify-avgifter</span><span class="red" id="bd-shopify">-</span></div>
+            <div class="pl-row indent"><span class="pl-label">– COGS</span><span class="red" id="bd-cogs">-</span></div>
+            <div class="pl-row indent"><span class="pl-label">– Frakt / 3PL</span><span class="red" id="bd-shipping">-</span></div>
+            <div class="pl-row indent"><span class="pl-label">– Annonsutgifter</span><span class="red" id="bd-ads">-</span></div>
+            <div class="pl-row indent"><span class="pl-label">– Custom kostnader</span><span class="red" id="bd-custom">-</span></div>
+            <div class="pl-row total"><span class="pl-label">Nettoresultat</span><span id="bd-net">-</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-products" class="tab-content">
+      <div class="section">
+        <div class="section-header"><h3>Lönsamhet per produkt</h3></div>
+        <div style="padding:0"><table>
+          <thead><tr><th>Produkt</th><th>Sålda</th><th>Intäkt</th><th>COGS</th><th>Bruttovinst</th><th>Marginal</th></tr></thead>
+          <tbody id="products-table"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <div id="tab-pl" class="tab-content">
+      <div class="section">
+        <div class="section-header"><h3>Resultaträkning (P&amp;L)</h3></div>
+        <div class="section-body">
+          <div class="pl-row"><span>Total omsättning</span><span id="pl-gross-rev">-</span></div>
+          <div class="pl-row indent"><span class="pl-label">– Returer</span><span class="red" id="pl-refunds">-</span></div>
+          <div class="pl-row indent"><span class="pl-label">– Moms</span><span class="red" id="pl-vat">-</span></div>
+          <div class="pl-row total"><span class="pl-label">Nettointäkt</span><span id="pl-net-rev">-</span></div>
+          <div style="height:10px"></div>
+          <div class="pl-row"><span>COGS</span><span class="red" id="pl-cogs">-</span></div>
+          <div class="pl-row total"><span class="pl-label">Bruttovinst</span><span id="pl-gross-profit">-</span></div>
+          <div style="height:10px"></div>
+          <div class="pl-row"><span>Frakt / 3PL</span><span class="red" id="pl-shipping">-</span></div>
+          <div class="pl-row"><span>Annonsutgifter</span><span class="red" id="pl-ads">-</span></div>
+          <div class="pl-row"><span>Shopify-avgifter</span><span class="red" id="pl-shopify">-</span></div>
+          <div class="pl-row"><span>Custom kostnader</span><span class="red" id="pl-custom">-</span></div>
+          <div class="pl-row total"><span class="pl-label">Rörelsekostnader</span><span class="red" id="pl-opex">-</span></div>
+          <div style="height:10px"></div>
+          <div class="pl-row total" style="font-size:16px"><span class="pl-label">Nettoresultat</span><span id="pl-net">-</span></div>
+          <div class="pl-row"><span class="pl-label">Nettomarginal</span><span id="pl-net-margin">-</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-ltv" class="tab-content">
+      <div class="metrics-grid">
+        <div class="metric"><div class="metric-label">Unika kunder</div><div class="metric-value white" id="ltv-customers">-</div></div>
+        <div class="metric"><div class="metric-label">Återköpskunder</div><div class="metric-value blue" id="ltv-repeat">-</div><div class="metric-sub" id="ltv-repeat-pct">-</div></div>
+        <div class="metric"><div class="metric-label">Snitt köp / kund</div><div class="metric-value white" id="ltv-avg-orders">-</div></div>
+        <div class="metric"><div class="metric-label">LTV / kund</div><div class="metric-value green" id="ltv-value">-</div></div>
+      </div>
+      <div class="section">
+        <div class="section-header"><h3>Toppkunder</h3></div>
+        <div style="padding:0"><table>
+          <thead><tr><th>Kund</th><th>Ordrar</th><th>Total intäkt</th><th>Snitt / order</th></tr></thead>
+          <tbody id="ltv-table"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <div id="tab-costs" class="tab-content">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div>
+          <div class="section" style="margin-bottom:10px">
+            <div class="section-header">
+              <h3>Meta Ads</h3>
+              <div style="display:flex;align-items:center;gap:6px">
+                <div class="dot" id="meta-dot"></div>
+                <span id="meta-status-text" style="font-size:11px;color:#6b7494">Ej kopplad</span>
+                <button class="btn-sm btn-blue" onclick="showMetaSetup()">Koppla API</button>
+              </div>
+            </div>
+            <div class="section-body">
+              <div id="meta-api-form" style="display:none;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #2a3045">
+                <input type="password" id="meta-token-input" placeholder="Meta API token" class="ci" style="width:100%;margin-bottom:6px">
+                <input type="text" id="meta-account-input" placeholder="act_123456789" class="ci" style="width:100%;margin-bottom:8px">
+                <div style="display:flex;gap:6px">
+                  <button class="btn-sm btn-blue" onclick="connectMeta()">Anslut</button>
+                  <button class="btn-sm" onclick="document.getElementById('meta-api-form').style.display='none'">Avbryt</button>
+                </div>
+              </div>
+              <div class="ri"><label>Meta Ads (kr)</label><input type="number" id="cost-meta" class="ci" style="width:110px" placeholder="0" oninput="saveCosts();recalc()"></div>
+              <div style="font-size:11px;color:#6b7494;margin-top:6px" id="meta-sync-note">Manuell inmatning</div>
+            </div>
+          </div>
+          <div class="section">
+            <div class="section-header"><h3>Övriga annonser</h3></div>
+            <div class="section-body">
+              <div class="ri"><label>Google Ads (kr)</label><input type="number" id="cost-google" class="ci" style="width:110px" placeholder="0" oninput="saveCosts();recalc()"></div>
+              <div class="ri"><label>TikTok Ads (kr)</label><input type="number" id="cost-tiktok" class="ci" style="width:110px" placeholder="0" oninput="saveCosts();recalc()"></div>
+              <div class="ri"><label>Snap Ads (kr)</label><input type="number" id="cost-snap" class="ci" style="width:110px" placeholder="0" oninput="saveCosts();recalc()"></div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="section" style="margin-bottom:10px">
+            <div class="section-header"><h3>Frakt &amp; 3PL</h3></div>
+            <div class="section-body">
+              <div class="ri"><label>Frakt / order (kr)</label><input type="number" id="cost-shipping-per-order" class="ci" style="width:110px" placeholder="0" oninput="saveCosts();recalc()"></div>
+              <div class="ri"><label>Fast 3PL / mån (kr)</label><input type="number" id="cost-3pl-fixed" class="ci" style="width:110px" placeholder="0" oninput="saveCosts();recalc()"></div>
+            </div>
+          </div>
+          <div class="section">
+            <div class="section-header"><h3>Custom kostnader</h3><button class="btn-sm" onclick="addCustomCost()">+ Lägg till</button></div>
+            <div class="section-body"><div id="custom-costs-list"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-moms" class="tab-content">
+      <div class="section">
+        <div class="section-header"><h3>Momssats per produkt</h3><span style="font-size:11px;color:#6b7494">Tom = standard</span></div>
+        <div style="padding:0"><table>
+          <thead><tr><th>Produkt</th><th>Momssats %</th><th>Status</th></tr></thead>
+          <tbody id="vat-table"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <div id="tab-cogs" class="tab-content">
+      <div class="section">
+        <div class="section-header"><h3>COGS per produkt &amp; variant</h3></div>
+        <div style="padding:0"><table>
+          <thead><tr><th>Produkt / Variant</th><th>SKU</th><th>Kostnad / enhet (kr)</th></tr></thead>
+          <tbody id="cogs-table"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <div id="tab-settings" class="tab-content">
+      <div class="section" style="max-width:420px">
+        <div class="section-header"><h3>Allmänt</h3></div>
+        <div class="section-body">
+          <div class="field"><label>Standard momssats %</label><input type="number" id="settings-vat" placeholder="25" oninput="saveSettings();recalc()"></div>
+          <div class="field"><label>Shopify-avgift %</label><input type="number" id="settings-shopify-fee" placeholder="0" step="0.1" oninput="saveSettings();recalc()"></div>
+          <div class="field"><label>Valuta</label>
+            <select id="settings-currency" class="ci" style="width:100%" onchange="saveSettings();recalc()">
+              <option value="SEK">SEK</option><option value="EUR">EUR</option><option value="DKK">DKK</option><option value="NOK">NOK</option>
+            </select>
+          </div>
+          <div class="field"><label>Butik</label><input type="text" id="settings-shop" class="ci" style="width:100%;opacity:.5" readonly></div>
+          <button class="btn-sm btn-danger" onclick="disconnect()">Koppla bort</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const PROXY='https://profit-analytics-server-production.up.railway.app';
+const TABS=['dashboard','products','pl','ltv','costs','moms','cogs','settings'];
+let shopUrl='',vatRate=25,shopifyFee=0,currency='SEK';
+let orders=[],products=[],customCosts=[],cogsMap={},vatMap={};
+let periodRefunds=0;
+let metaToken='',metaAccountId='',metaConnected=false,metaSpend=0;
+let currentPeriod='7d';
+
+const fmt=n=>typeof n!=='number'||isNaN(n)?'-':new Intl.NumberFormat('sv-SE',{style:'currency',currency,minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+const fmtPct=n=>isNaN(n)?'-':n.toFixed(1)+'%';
+const fmtNum=n=>isNaN(n)?'-':new Intl.NumberFormat('sv-SE').format(Math.round(n));
+
+// Convert date to Stockholm date number YYYYMMDD
+function toSthlmDateNum(d) {
+  const s=new Date(d.toLocaleString('en-US',{timeZone:'Europe/Stockholm'}));
+  return s.getFullYear()*10000+(s.getMonth()+1)*100+s.getDate();
+}
+
+function getPeriodDates() {
+  const now=new Date();
+  const sthlmNow=new Date(now.toLocaleString('en-US',{timeZone:'Europe/Stockholm'}));
+  const y=sthlmNow.getFullYear(),m=sthlmNow.getMonth(),d=sthlmNow.getDate();
+  let from,to=new Date(y,m,d+1);
+  if(currentPeriod==='today'){from=new Date(y,m,d);}
+  else if(currentPeriod==='yesterday'){from=new Date(y,m,d-1);to=new Date(y,m,d);}
+  else if(currentPeriod==='7d'){from=new Date(y,m,d-7);}
+  else if(currentPeriod==='30d'){from=new Date(y,m,d-30);}
+  else if(currentPeriod==='month'){from=new Date(y,m,1);}
+  else{
+    const df=document.getElementById('date-from')?.value;
+    const dt=document.getElementById('date-to')?.value;
+    if(df&&dt){from=new Date(df+'T00:00:00');to=new Date(dt+'T00:00:00');to.setDate(to.getDate()+1);}
+    else{from=new Date(y,m,d-7);}
+  }
+  return{from,to};
+}
+
+function showTab(tab){
+  document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(el=>el.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  document.querySelectorAll('nav button')[TABS.indexOf(tab)].classList.add('active');
+}
+
+function showSetup(){
+  document.getElementById('setup-view').style.display='block';
+  document.getElementById('app-view').style.display='none';
+}
+
+async function connectShopify(){
+  const url=document.getElementById('shop-url').value.trim().replace(/^https?:\/\//,'').replace(/\/$/,'');
+  if(!url){showSetupError('Fyll i butiks-URL.');return;}
+  const btn=document.getElementById('connect-btn');
+  btn.disabled=true;btn.textContent='Ansluter...';
+  try{
+    const resp=await fetch(PROXY+'/health');
+    if(!resp.ok)throw new Error('Servern svarade med '+resp.status);
+    const data=await resp.json();
+    if(!data.connectedShops.includes(url)){
+      showSetupError('Öppna länken för att ansluta: '+PROXY+'/auth?shop='+url);
+      btn.disabled=false;btn.textContent='Anslut butik';return;
+    }
+    shopUrl=url;localStorage.setItem('pa_shop',shopUrl);
+    initApp();await loadData();
+  }catch(e){showSetupError('Fel: '+e.message);btn.disabled=false;btn.textContent='Anslut butik';}
+}
+
+function showSetupError(msg){const el=document.getElementById('setup-error');el.textContent=msg;el.style.display='block';}
+
+function initApp(){
+  document.getElementById('settings-shop').value=shopUrl;
+  document.getElementById('settings-vat').value=localStorage.getItem('pa_vat')||vatRate;
+  document.getElementById('settings-shopify-fee').value=localStorage.getItem('pa_fee')||shopifyFee;
+  document.getElementById('settings-currency').value=localStorage.getItem('pa_currency')||currency;
+  loadCosts();loadCogs();loadVat();loadMetaSettings();
+  document.getElementById('setup-view').style.display='none';
+  document.getElementById('app-view').style.display='block';
+  document.getElementById('header-right').innerHTML='<span style="font-size:11px;color:#6b7494">'+shopUrl+'</span>';
+}
+
+function disconnect(){
+  if(!confirm('Koppla bort?'))return;
+  localStorage.removeItem('pa_shop');shopUrl='';orders=[];products=[];
+  document.getElementById('setup-view').style.display='block';
+  document.getElementById('app-view').style.display='none';
+  document.getElementById('header-right').innerHTML='<button class="btn-sm" onclick="showSetup()">Anslut Shopify</button>';
+  document.getElementById('connect-btn').disabled=false;
+  document.getElementById('connect-btn').textContent='Anslut butik';
+}
+
+async function shopifyFetch(path){
+  return fetch(PROXY+'/shopify'+path,{headers:{'Content-Type':'application/json'}});
+}
+
+async function loadData(){
+  if(!shopUrl)return;
+  document.getElementById('loading-state').style.display='block';
+  document.getElementById('dashboard-data').style.display='none';
+  document.getElementById('error-banner').style.display='none';
+  document.getElementById('sync-status').textContent='Hämtar...';
+  const{from,to}=getPeriodDates();
+  try{
+    [orders,products]=await Promise.all([fetchAllOrders(from,to),fetchProducts()]);
+    periodRefunds=await fetchPeriodRefunds(from,to);
+    if(metaConnected)await syncMetaSpend(from,to);
+    buildCogsTable();buildVatTable();recalc();
+    document.getElementById('loading-state').style.display='none';
+    document.getElementById('dashboard-data').style.display='block';
+    document.getElementById('sync-status').textContent='Synkad '+new Date().toLocaleTimeString('sv-SE',{hour:'2-digit',minute:'2-digit'})+' ('+orders.length+' ordrar)';
+  }catch(e){
+    document.getElementById('loading-state').style.display='none';
+    document.getElementById('dashboard-data').style.display='block';
+    const eb=document.getElementById('error-banner');
+    eb.innerHTML=e.message.includes('401')?'Session utgången. <a href="'+PROXY+'/auth?shop='+shopUrl+'" target="_blank" style="color:#3b82f6">Klicka här för att återansluta</a>':'Fel: '+e.message;
+    eb.style.display='block';
+  }
+}
+
+async function fetchAllOrders(from,to){
+  let all=[],pageInfo=null,first=true,done=false;
+  const fromWide=new Date(from.getTime()-3*60*60*1000);
+  const toWide=new Date(to.getTime()+3*60*60*1000);
+  const fromNum=toSthlmDateNum(from);
+  const toNum=toSthlmDateNum(to);
+  while((first||pageInfo)&&!done){
+    first=false;
+    // First request uses date filter, subsequent use page_info only
+    let url;
+    if(!pageInfo){
+      url='/admin/api/2024-01/orders.json?status=any&limit=250&created_at_min='+fromWide.toISOString()+'&created_at_max='+toWide.toISOString()+'&order=created_at+asc';
+    } else {
+      url='/admin/api/2024-01/orders.json?limit=250&page_info='+pageInfo;
+    }
+    const resp=await shopifyFetch(url);
+    if(!resp.ok)throw new Error(resp.status);
+    const data=await resp.json();
+    const batch=data.orders||[];
+    // Filter batch to our date range
+    const filtered=batch.filter(o=>{
+      const num=toSthlmDateNum(new Date(o.processed_at||o.created_at));
+      return num>=fromNum&&num<toNum;
+    });
+    all=all.concat(filtered);
+    setText('sync-status','Hämtar... '+all.length+' ordrar');
+    // Check if last order in batch is past our end date
+    if(batch.length>0){
+      const lastNum=toSthlmDateNum(new Date(batch[batch.length-1].processed_at||batch[batch.length-1].created_at));
+      if(lastNum>=toNum)done=true;
+    }
+    const link=resp.headers.get('Link')||'';
+    const nm=link.match(/page_info=([^>&"]+)[^>]*>;\s*rel="next"/);
+    pageInfo=nm?nm[1]:null;
+    if(batch.length<250)done=true;
+  }
+  return all;
+}
+
+async function fetchPeriodRefunds(from,to){
+  // Fetch orders updated in period that have refunds created in period
+  let total=0;
+  const fromNum=toSthlmDateNum(from);
+  const toNum=toSthlmDateNum(to);
+  let all=[],pageInfo=null,first=true;
+  const fromWide=new Date(from.getTime()-3*60*60*1000);
+  const toWide=new Date(to.getTime()+3*60*60*1000);
+  while(first||pageInfo){
+    first=false;
+    let url='/admin/api/2024-01/orders.json?status=any&limit=250&updated_at_min='+fromWide.toISOString()+'&updated_at_max='+toWide.toISOString()+'&fields=id,processed_at,created_at,refunds';
+    if(pageInfo)url+='&page_info='+pageInfo;
+    const resp=await shopifyFetch(url);
+    if(!resp.ok)break;
+    const data=await resp.json();
+    all=all.concat(data.orders||[]);
+    const link=resp.headers.get('Link')||'';
+    const m=link.match(/<[^>]*page_info=([^>&"]+)[^>]*>;\s*rel="next"/);
+    pageInfo=m?m[1]:null;
+  }
+  // Sum refund transactions created in this period
+  all.forEach(o=>{
+    (o.refunds||[]).forEach(r=>{
+      const rNum=toSthlmDateNum(new Date(r.created_at));
+      if(rNum>=fromNum&&rNum<toNum){
+        (r.transactions||[]).forEach(t=>{
+          if(t.kind==='refund'&&t.status==='success'){
+            total+=parseFloat(t.amount)||0;
+          }
+        });
+      }
+    });
+  });
+  return total;
+}
+
+async function fetchProducts(){
+  const resp=await shopifyFetch('/admin/api/2024-01/products.json?limit=250&fields=id,title,variants');
+  if(!resp.ok)return[];
+  return(await resp.json()).products||[];
+}
+
+function recalc(){
+  const defaultVat=parseFloat(document.getElementById('settings-vat')?.value)||vatRate||25;
+  const shopFee=parseFloat(document.getElementById('settings-shopify-fee')?.value)||0;
+  const metaAds=metaConnected?metaSpend:(parseFloat(document.getElementById('cost-meta')?.value)||0);
+  const googleAds=parseFloat(document.getElementById('cost-google')?.value)||0;
+  const tiktokAds=parseFloat(document.getElementById('cost-tiktok')?.value)||0;
+  const snapAds=parseFloat(document.getElementById('cost-snap')?.value)||0;
+  const shippingPerOrder=parseFloat(document.getElementById('cost-shipping-per-order')?.value)||0;
+  const fixedLogistics=parseFloat(document.getElementById('cost-3pl-fixed')?.value)||0;
+  const totalAds=metaAds+googleAds+tiktokAds+snapAds;
+  const nOrders=orders.length;
+  let grossRev=0,vatAmt=0,totalCogs=0;
+  const productStats={};const customerStats={};
+  orders.forEach(o=>{
+    const price=parseFloat(o.current_total_price)||parseFloat(o.total_price)||0;
+    grossRev+=price;
+    const email=o.email||String(o.id);
+    if(!customerStats[email])customerStats[email]={email,orders:0,revenue:0};
+    customerStats[email].orders++;customerStats[email].revenue+=price;
+    (o.line_items||[]).forEach(li=>{
+      const pid=li.product_id;const vid=li.variant_id;
+      const cogsKey=vid?'v'+vid:'p'+pid;
+      const unitCogs=cogsMap[cogsKey]!==undefined?cogsMap[cogsKey]:(cogsMap['p'+pid]||0);
+      totalCogs+=unitCogs*li.quantity;
+      const lineRev=parseFloat(li.price)*li.quantity;
+      const lineVat=vatMap[pid]!==undefined?vatMap[pid]:defaultVat;
+      vatAmt+=lineRev*(lineVat/(100+lineVat));
+      if(!productStats[pid])productStats[pid]={title:li.title,qty:0,revenue:0,cogs:0};
+      productStats[pid].qty+=li.quantity;productStats[pid].revenue+=lineRev;productStats[pid].cogs+=unitCogs*li.quantity;
+    });
+  });
+  // Subtract refunds made in period (from older orders)
+  const netRevAfterRefunds=grossRev-periodRefunds;
+  const netRev=netRevAfterRefunds-vatAmt;
+  const shopifyFeeAmt=netRev*(shopFee/100);
+  const shippingTotal=shippingPerOrder*nOrders+fixedLogistics;
+  let customTotal=0;
+  customCosts.forEach(c=>{
+    let amt=parseFloat(c.amount)||0;
+    if(c.type==='monthly'){const{from,to}=getPeriodDates();const days=Math.max(1,(to-from)/(1000*60*60*24));amt=amt*(days/30);}
+    customTotal+=amt;
+  });
+  const grossProfit=netRev-totalCogs;
+  const opex=shopifyFeeAmt+shippingTotal+totalAds+customTotal;
+  const netProfit=grossProfit-opex;
+  const aov=nOrders>0?grossRev/nOrders:0;
+  const roas=totalAds>0?netRev/totalAds:0;
+  const grossMargin=netRev>0?grossProfit/netRev*100:0;
+  const netMargin=netRev>0?netProfit/netRev*100:0;
+  const totalCosts=periodRefunds+vatAmt+totalCogs+opex;
+
+  // Display gross rev minus refunds as "Total omsättning"
+  setText('m-revenue',fmt(netRevAfterRefunds));setText('m-orders',nOrders+' ordrar');
+  setText('m-gross',fmt(grossProfit));setText('m-gross-margin',fmtPct(grossMargin)+' marginal');
+  const ne=document.getElementById('m-net');if(ne){ne.textContent=fmt(netProfit);ne.className='metric-value '+(netProfit>=0?'green':'red');}
+  const nm=document.getElementById('m-net-margin');if(nm){nm.textContent=fmtPct(netMargin)+' marginal';nm.className='metric-sub';}
+  setText('m-costs',fmt(totalCosts));setText('m-cost-pct',fmtPct(netRevAfterRefunds>0?totalCosts/netRevAfterRefunds*100:0)+' av omsättning');
+  setText('m-aov',fmt(aov));setText('m-roas',roas>0?roas.toFixed(2)+'x':'-');
+
+  setText('bd-gross-rev',fmt(grossRev));
+  if(periodRefunds>0)setRed('bd-refunds','−'+fmt(periodRefunds));else setText('bd-refunds','−0 kr');
+  setRed('bd-vat','−'+fmt(vatAmt));setRed('bd-shopify','−'+fmt(shopifyFeeAmt));
+  setRed('bd-cogs','−'+fmt(totalCogs));setRed('bd-shipping','−'+fmt(shippingTotal));
+  setRed('bd-ads','−'+fmt(totalAds));setRed('bd-custom','−'+fmt(customTotal));
+  const bn=document.getElementById('bd-net');if(bn){bn.textContent=fmt(netProfit);bn.className=netProfit>=0?'green':'red';}
+
+  setText('pl-gross-rev',fmt(grossRev));
+  setRed('pl-refunds','−'+fmt(periodRefunds));setRed('pl-vat','−'+fmt(vatAmt));setText('pl-net-rev',fmt(netRev));
+  setRed('pl-cogs','−'+fmt(totalCogs));
+  const gp=document.getElementById('pl-gross-profit');if(gp){gp.textContent=fmt(grossProfit);gp.className=grossProfit>=0?'green':'red';}
+  setRed('pl-shipping','−'+fmt(shippingTotal));setRed('pl-ads','−'+fmt(totalAds));setRed('pl-shopify','−'+fmt(shopifyFeeAmt));setRed('pl-custom','−'+fmt(customTotal));
+  setRed('pl-opex','−'+fmt(opex));
+  const pn=document.getElementById('pl-net');if(pn){pn.textContent=fmt(netProfit);pn.className=netProfit>=0?'green':'red';}
+  setText('pl-net-margin',fmtPct(netMargin));
+
+  const prodArr=Object.values(productStats).sort((a,b)=>b.revenue-a.revenue);
+  const pt=document.getElementById('products-table');
+  if(pt)pt.innerHTML=prodArr.map(p=>{const gp=p.revenue-p.cogs;const mg=p.revenue>0?gp/p.revenue*100:0;return`<tr><td>${p.title}</td><td>${fmtNum(p.qty)}</td><td>${fmt(p.revenue)}</td><td class="red">${fmt(p.cogs)}</td><td class="${gp>=0?'green':'red'}">${fmt(gp)}</td><td><span class="badge ${mg>=30?'green':'red'}">${fmtPct(mg)}</span></td></tr>`;}).join('')||'<tr><td colspan="6" style="text-align:center;color:#6b7494;padding:24px">Inga ordrar</td></tr>';
+
+  const custArr=Object.values(customerStats).sort((a,b)=>b.revenue-a.revenue);
+  const repeat=custArr.filter(c=>c.orders>1).length;const tot=custArr.length;
+  setText('ltv-customers',fmtNum(tot));setText('ltv-repeat',fmtNum(repeat));
+  setText('ltv-repeat-pct',tot>0?fmtPct(repeat/tot*100)+' av kunder':'-');
+  setText('ltv-avg-orders',tot>0?(orders.length/tot).toFixed(1):'-');
+  setText('ltv-value',fmt(tot>0?grossRev/tot:0));
+  const lt=document.getElementById('ltv-table');
+  if(lt)lt.innerHTML=custArr.slice(0,20).map(c=>`<tr><td>${c.email||'Okänd'}</td><td>${c.orders}</td><td>${fmt(c.revenue)}</td><td>${fmt(c.revenue/c.orders)}</td></tr>`).join('');
+
+  buildDailyChart(orders);
+}
+
+function buildDailyChart(ords){
+  const{from,to}=getPeriodDates();
+  const days=Math.max(1,Math.round((to-from)/(1000*60*60*24)));
+  const dayMap={};
+  for(let i=0;i<days;i++){
+    const d=new Date(from);d.setDate(d.getDate()+i);
+    const s=new Date(d.toLocaleString('en-US',{timeZone:'Europe/Stockholm'}));
+    const key=s.getFullYear()+'-'+String(s.getMonth()+1).padStart(2,'0')+'-'+String(s.getDate()).padStart(2,'0');
+    dayMap[key]=0;
+  }
+  ords.forEach(o=>{
+    const s=new Date(new Date(o.processed_at||o.created_at).toLocaleString('en-US',{timeZone:'Europe/Stockholm'}));
+    const key=s.getFullYear()+'-'+String(s.getMonth()+1).padStart(2,'0')+'-'+String(s.getDate()).padStart(2,'0');
+    if(dayMap[key]!==undefined)dayMap[key]+=parseFloat(o.current_total_price)||parseFloat(o.total_price)||0;
+  });
+  const entries=Object.entries(dayMap);
+  const maxVal=Math.max(...entries.map(e=>e[1]),1);
+  const chart=document.getElementById('daily-chart');if(!chart)return;
+  if(entries.length>90){chart.innerHTML='<p style="color:#6b7494;font-size:12px">För många dagar.</p>';return;}
+  chart.innerHTML=entries.map(([date,val])=>{
+    const h=Math.max(2,Math.round(val/maxVal*100));
+    const label=days<=14?date.slice(5):date.slice(5,7);
+    return`<div class="chart-bar-col"><div class="chart-bar" style="height:${h}%;background:#3b82f6;opacity:${val>0?1:.2}" title="${date}: ${Math.round(val)} ${currency}"></div><span class="chart-label">${label}</span></div>`;
+  }).join('');
+}
+
+function buildCogsTable(){
+  const tbl=document.getElementById('cogs-table');if(!tbl)return;
+  let rows='';
+  products.forEach(p=>{
+    const variants=p.variants||[];
+    if(variants.length<=1){
+      const key='p'+p.id;
+      rows+=`<tr><td>${p.title}</td><td style="color:#6b7494">—</td><td><input type="number" placeholder="0" value="${cogsMap[key]||''}" class="ci" style="width:100px" onchange="cogsMap['${key}']=parseFloat(this.value)||0;saveCogs();recalc()"></td></tr>`;
+    }else{
+      rows+=`<tr style="background:#1a1f30"><td colspan="3" style="font-size:11px;color:#9ca3b8;padding:5px 11px">${p.title}</td></tr>`;
+      variants.forEach(v=>{
+        const key='v'+v.id;
+        rows+=`<tr><td style="padding-left:20px;color:#9ca3b8">${v.title}</td><td style="color:#6b7494;font-size:11px">${v.sku||'—'}</td><td><input type="number" placeholder="0" value="${cogsMap[key]||''}" class="ci" style="width:100px" onchange="cogsMap['${key}']=parseFloat(this.value)||0;saveCogs();recalc()"></td></tr>`;
+      });
+    }
+  });
+  tbl.innerHTML=rows||'<tr><td colspan="3" style="text-align:center;color:#6b7494;padding:24px">Anslut butiken</td></tr>';
+}
+
+function buildVatTable(){
+  const tbl=document.getElementById('vat-table');if(!tbl)return;
+  const defaultVat=parseFloat(document.getElementById('settings-vat')?.value)||vatRate||25;
+  tbl.innerHTML=products.map(p=>{
+    const pVat=vatMap[p.id];
+    const status=pVat!==undefined?`<span style="color:#3b82f6;font-size:11px">${pVat}%</span>`:`<span style="color:#6b7494;font-size:11px">Standard ${defaultVat}%</span>`;
+    return`<tr><td>${p.title}</td><td><div style="display:flex;align-items:center;gap:6px"><input type="number" placeholder="${defaultVat}" value="${pVat!==undefined?pVat:''}" class="ci" style="width:80px" onchange="setProductVat(${p.id},this.value);recalc()"><span style="font-size:11px;color:#6b7494">%</span></div></td><td>${status}</td></tr>`;
+  }).join('')||'<tr><td colspan="3" style="text-align:center;color:#6b7494;padding:24px">Anslut butiken</td></tr>';
+}
+
+async function resyncAll(){
+  if(!confirm('Synka om alla ordrar från Shopify? Det kan ta några minuter.'))return;
+  const resp=await fetch(PROXY+'/sync',{method:'POST'});
+  const data=await resp.json();
+  setText('sync-status','Full sync startad...');
+  setTimeout(()=>loadData(),30000);
+}
+
+function setText(id,val){const el=document.getElementById(id);if(el)el.textContent=val;}
+function setRed(id,val){const el=document.getElementById(id);if(el){el.textContent=val;el.className='red';}}
+
+function setPeriod(period,btn){
+  currentPeriod=period;
+  document.querySelectorAll('.period-tabs button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('custom-dates').style.display=period==='custom'?'flex':'none';
+  if(period!=='custom')loadData();
+}
+
+function showMetaSetup(){const f=document.getElementById('meta-api-form');f.style.display=f.style.display==='none'?'block':'none';}
+
+async function connectMeta(){
+  const token=document.getElementById('meta-token-input').value.trim();
+  const accountId=document.getElementById('meta-account-input').value.trim();
+  if(!token||!accountId){alert('Fyll i token och konto-ID');return;}
+  try{
+    const resp=await fetch(`https://graph.facebook.com/v19.0/${accountId}?fields=name&access_token=${token}`);
+    const data=await resp.json();
+    if(data.error){alert('Meta fel: '+data.error.message);return;}
+    metaToken=token;metaAccountId=accountId;metaConnected=true;
+    localStorage.setItem('pa_meta_token',metaToken);localStorage.setItem('pa_meta_account',metaAccountId);
+    updateMetaStatus();document.getElementById('meta-api-form').style.display='none';
+    const{from,to}=getPeriodDates();await syncMetaSpend(from,to);recalc();
+  }catch(e){alert('Fel: '+e.message);}
+}
+
+async function syncMetaSpend(from,to){
+  if(!metaConnected)return;
+  try{
+    const since=from.toISOString().slice(0,10);const until=to.toISOString().slice(0,10);
+    const resp=await fetch(`${PROXY}/meta/v19.0/${metaAccountId}/insights?fields=spend&time_range={'since':'${since}','until':'${until}'}&access_token=${metaToken}`);
+    const data=await resp.json();
+    if(data.data&&data.data[0]){
+      metaSpend=parseFloat(data.data[0].spend)||0;
+      const el=document.getElementById('cost-meta');if(el)el.value=Math.round(metaSpend);
+      document.getElementById('meta-sync-note').textContent='Autosynkad: '+fmt(metaSpend);
+    }
+  }catch(e){}
+}
+
+function updateMetaStatus(){
+  const dot=document.getElementById('meta-dot');const txt=document.getElementById('meta-status-text');
+  if(metaConnected){dot.className='dot green';txt.textContent='Ansluten';}else{dot.className='dot';txt.textContent='Ej kopplad';}
+}
+function loadMetaSettings(){
+  const t=localStorage.getItem('pa_meta_token');const a=localStorage.getItem('pa_meta_account');
+  if(t&&a){metaToken=t;metaAccountId=a;metaConnected=true;updateMetaStatus();}
+}
+
+function addCustomCost(){customCosts.push({name:'',amount:0,type:'monthly'});renderCustomCosts();}
+function removeCustomCost(i){customCosts.splice(i,1);saveCosts();renderCustomCosts();recalc();}
+function renderCustomCosts(){
+  const list=document.getElementById('custom-costs-list');if(!list)return;
+  list.innerHTML=customCosts.map((c,i)=>`<div class="custom-item"><input placeholder="Namn" value="${c.name||''}" class="ci" style="flex:1" onchange="customCosts[${i}].name=this.value;saveCosts()"><input type="number" placeholder="Belopp" value="${c.amount||''}" class="ci" style="width:90px" onchange="customCosts[${i}].amount=parseFloat(this.value)||0;saveCosts();recalc()"><select class="ci" onchange="customCosts[${i}].type=this.value;saveCosts();recalc()"><option value="monthly" ${c.type==='monthly'?'selected':''}>/ mån</option><option value="once" ${c.type==='once'?'selected':''}>Engång</option></select><button class="rm" onclick="removeCustomCost(${i})">✕</button></div>`).join('');
+}
+
+function saveCosts(){
+  const g=id=>{const el=document.getElementById(id);return el?el.value:0;};
+  localStorage.setItem('pa_costs',JSON.stringify({meta:g('cost-meta'),google:g('cost-google'),tiktok:g('cost-tiktok'),snap:g('cost-snap'),shippingPerOrder:g('cost-shipping-per-order'),logistics:g('cost-3pl-fixed'),custom:customCosts}));
+}
+function loadCosts(){
+  const raw=localStorage.getItem('pa_costs');if(!raw)return;
+  try{
+    const c=JSON.parse(raw);
+    const sv=(id,v)=>{const el=document.getElementById(id);if(el&&v!==undefined&&v!=='')el.value=v;};
+    sv('cost-meta',c.meta);sv('cost-google',c.google);sv('cost-tiktok',c.tiktok);sv('cost-snap',c.snap);
+    sv('cost-shipping-per-order',c.shippingPerOrder);sv('cost-3pl-fixed',c.logistics);
+    customCosts=c.custom||[];renderCustomCosts();
+  }catch(e){}
+}
+function setProductVat(pid,val){
+  if(val===''||val===null){delete vatMap[pid];}else{vatMap[pid]=parseFloat(val);}
+  saveVat();buildVatTable();
+}
+function saveVat(){localStorage.setItem('pa_vat_map',JSON.stringify(vatMap));}
+function loadVat(){const raw=localStorage.getItem('pa_vat_map');if(raw)try{vatMap=JSON.parse(raw);}catch(e){}}
+function saveCogs(){localStorage.setItem('pa_cogs',JSON.stringify(cogsMap));}
+function loadCogs(){const raw=localStorage.getItem('pa_cogs');if(raw)try{cogsMap=JSON.parse(raw);}catch(e){}}
+function saveSettings(){
+  const vat=document.getElementById('settings-vat')?.value;
+  const fee=document.getElementById('settings-shopify-fee')?.value;
+  const cur=document.getElementById('settings-currency')?.value;
+  if(vat){vatRate=parseFloat(vat);localStorage.setItem('pa_vat',vat);}
+  if(fee){shopifyFee=parseFloat(fee);localStorage.setItem('pa_fee',fee);}
+  if(cur){currency=cur;localStorage.setItem('pa_currency',cur);}
+}
+
+window.addEventListener('load',()=>{
+  const shop=localStorage.getItem('pa_shop');
+  const vat=localStorage.getItem('pa_vat');
+  const fee=localStorage.getItem('pa_fee');
+  const cur=localStorage.getItem('pa_currency');
+  if(vat)vatRate=parseFloat(vat);
+  if(fee)shopifyFee=parseFloat(fee);
+  if(cur)currency=cur;
+  if(shop){shopUrl=shop;initApp();loadData();}
+});
+</script>
+</body>
+</html>
