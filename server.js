@@ -47,38 +47,6 @@ async function initDB() {
 }
 
 app.use(cors({ origin: '*' }));
-app.use('/webhooks', express.raw({ type: 'application/json' }));
-
-// Register webhooks with Shopify
-async function registerWebhooks(shop, token) {
-  const webhooks = [
-    { topic: 'orders/create', address: BASE_URL + '/webhooks/orders' },
-    { topic: 'orders/updated', address: BASE_URL + '/webhooks/orders' },
-  ];
-  for (const wh of webhooks) {
-    try {
-      await httpsPost(shop, '/admin/api/2024-01/webhooks.json', {
-        webhook: { topic: wh.topic, address: wh.address, format: 'json' }
-      }, token);
-      console.log('Registered webhook:', wh.topic);
-    } catch(e) { console.error('Webhook registration error:', e.message); }
-  }
-}
-
-// Receive webhook from Shopify
-app.post('/webhooks/orders', async (req, res) => {
-  res.status(200).send('OK');
-  try {
-    const shop = req.headers['x-shopify-shop-domain'];
-    if (!shop) return;
-    const order = JSON.parse(req.body.toString());
-    if (!order || !order.id) return;
-    await upsertOrders(shop, [order]);
-    console.log('Webhook: updated order', order.id, 'for', shop);
-  } catch(e) { console.error('Webhook error:', e.message); }
-});
-
-
 app.use(express.json());
 
 // OAuth
@@ -97,8 +65,6 @@ app.get('/auth/callback', async (req, res) => {
     if (!data.access_token) return res.status(400).send('No token');
     tokenStore[shop] = data.access_token;
     saveTokens();
-    // Register webhooks
-    await registerWebhooks(shop, data.access_token);
     // Start initial sync in background
     syncAllOrders(shop, data.access_token);
     res.send(`<html><body style="background:#0f1117;color:#22c55e;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column"><h1>✓ Ansluten!</h1><p style="color:#9ca3b8;margin-top:12px">Synkar ordrar i bakgrunden. Stäng denna flik.</p></body></html>`);
@@ -111,8 +77,12 @@ async function syncAllOrders(shop, token) {
   let sinceId = null, total = 0;
   try {
     while (true) {
-      let path = '/admin/api/2024-01/orders.json?status=any&limit=250&created_at_min=2020-01-01T00:00:00Z';
-      if (sinceId) path += '&since_id=' + sinceId;
+      let path;
+      if (sinceId) {
+        path = '/admin/api/2024-01/orders.json?status=any&limit=250&order=id+asc&since_id=' + sinceId;
+      } else {
+        path = '/admin/api/2024-01/orders.json?status=any&limit=250&order=id+asc&created_at_min=2020-01-01T00:00:00Z';
+      }
       const { body } = await shopifyGet(shop, token, path);
       const data = JSON.parse(body);
       const orders = data.orders || [];
@@ -169,8 +139,9 @@ app.get('/refunds', async (req, res) => {
   if (!shop) return res.status(401).json({ error: 'Not authenticated' });
   const { from, to } = req.query;
   try {
+    // Fetch ALL orders with refunds - refund may be on order from different date
     const result = await pool.query(
-      `SELECT refunds FROM orders WHERE shop=$1 AND refunds != '[]'::jsonb`,
+      `SELECT refunds, created_at, processed_at FROM orders WHERE shop=$1 AND refunds != '[]'::jsonb`,
       [shop]
     );
     let total = 0;
@@ -203,6 +174,31 @@ app.get('/refunds', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// Debug endpoint to inspect refund structure
+app.get('/refunds-debug', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  const { from, to } = req.query;
+  try {
+    const result = await pool.query(
+      `SELECT id, refunds, created_at, processed_at FROM orders WHERE shop=$1 AND refunds != '[]'::jsonb`,
+      [shop]
+    );
+    const fromDate = from ? new Date(from) : new Date('2026-06-10T22:00:00Z');
+    const toDate = to ? new Date(to) : new Date('2026-06-12T22:00:00Z');
+    const matches = [];
+    result.rows.forEach(row => {
+      (row.refunds || []).forEach(r => {
+        const rDate = new Date(r.created_at);
+        if (rDate >= fromDate && rDate < toDate) {
+          matches.push({ order_id: row.id, created_at: r.created_at, refund_line_items: r.refund_line_items, order_adjustments: r.order_adjustments, transactions: r.transactions });
+        }
+      });
+    });
+    res.json(matches);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // Sync status
 app.get('/sync-status', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
@@ -213,12 +209,52 @@ app.get('/sync-status', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// Delta sync - updates recently modified orders
+async function syncRecentOrders(shop, token) {
+  const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+  let pageInfo = null, first = true, total = 0;
+  try {
+    while (first || pageInfo) {
+      first = false;
+      let path = '/admin/api/2024-01/orders.json?status=any&limit=250&updated_at_min=' + since;
+      if (pageInfo) path = '/admin/api/2024-01/orders.json?limit=250&page_info=' + pageInfo;
+      const { body, link } = await shopifyGet(shop, token, path);
+      const data = JSON.parse(body);
+      const orders = data.orders || [];
+      if (orders.length === 0) break;
+      await upsertOrders(shop, orders);
+      total += orders.length;
+      const nm = link.match(/page_info=([^>&"]+)[^>]*>;\s*rel="next"/);
+      pageInfo = nm ? nm[1] : null;
+      if (orders.length < 250) break;
+    }
+    console.log('Delta sync complete - updated', total, 'orders');
+  } catch(e) { console.error('Delta sync error:', e.message); }
+}
+
+// Run delta sync every 30 minutes
+setInterval(() => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (shop && token) syncRecentOrders(shop, token);
+}, 30 * 60 * 1000);
+
+// Manual delta sync
+app.post('/sync-recent', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (!shop || !token) return res.status(401).json({ error: 'Not authenticated' });
+  syncRecentOrders(shop, token);
+  res.json({ message: 'Delta sync started' });
+});
+
 // Manual resync
 app.post('/sync', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   const token = tokenStore[shop];
   if (!shop || !token) return res.status(401).json({ error: 'Not authenticated' });
   syncAllOrders(shop, token);
+  syncRecentOrders(shop, token);
   res.json({ message: 'Sync started' });
 });
 
@@ -262,12 +298,10 @@ function shopifyGet(hostname, token, path) {
   });
 }
 
-function httpsPost(hostname, path, body, token) {
+function httpsPost(hostname, path, body) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(body);
-    const headers = { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) };
-    if (token) headers['X-Shopify-Access-Token'] = token;
-    const options = { hostname, path, method: 'POST', headers };
+    const options = { hostname, path, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } };
     const req = https.request(options, res => { let raw = ''; res.on('data', c => raw += c); res.on('end', () => resolve(raw)); });
     req.on('error', reject);
     req.write(data);
