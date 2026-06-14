@@ -142,15 +142,19 @@ app.get('/refunds', async (req, res) => {
     let total = 0;
     const fromDate = new Date(from);
     const toDate = new Date(to);
+    function toSthlmDateNum(d) {
+      const s = new Date(d.toLocaleString('en-US', {timeZone: 'Europe/Stockholm'}));
+      return s.getFullYear()*10000 + (s.getMonth()+1)*100 + s.getDate();
+    }
+    const fromNum = toSthlmDateNum(fromDate);
+    const toNum = toSthlmDateNum(toDate);
     result.rows.forEach(row => {
       (row.refunds || []).forEach(r => {
-        const rDate = new Date(r.created_at);
-        if (rDate >= fromDate && rDate < toDate) {
-          // Sum refund_line_items (product refunds)
+        const rNum = toSthlmDateNum(new Date(r.created_at));
+        if (rNum >= fromNum && rNum < toNum) {
           (r.refund_line_items || []).forEach(li => {
             total += parseFloat(li.subtotal) || 0;
           });
-          // Sum shipping refunds
           (r.order_adjustments || []).forEach(adj => {
             if (adj.kind === 'shipping_refund') {
               total += Math.abs(parseFloat(adj.amount) || 0);
