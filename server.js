@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3001;
 const CLIENT_ID = process.env.SHOPIFY_CLIENT_ID || '32e267c453b2a6fa1ae82f355d413b8e';
 const CLIENT_SECRET = process.env.SHOPIFY_CLIENT_SECRET || '';
 const BASE_URL = process.env.BASE_URL || 'https://profit-analytics-server-production.up.railway.app';
-const SCOPES = 'read_orders,read_products';
+const SCOPES = 'read_orders,read_products,read_all_orders';
 const TOKEN_FILE = '/tmp/tokens.json';
 
 // Load tokens
@@ -74,23 +74,20 @@ app.get('/auth/callback', async (req, res) => {
 // Sync all orders from Shopify to DB
 async function syncAllOrders(shop, token) {
   console.log('Starting sync for', shop);
-  let pageInfo = null, first = true, total = 0;
+  let sinceId = null, total = 0;
   try {
-    while (first || pageInfo) {
-      first = false;
-      let path = '/admin/api/2024-01/orders.json?status=any&limit=250&order=created_at+asc';
-      if (pageInfo) path = `/admin/api/2024-01/orders.json?limit=250&page_info=${pageInfo}`;
-      const { body, link } = await shopifyGet(shop, token, path);
+    while (true) {
+      let path = '/admin/api/2024-01/orders.json?status=any&limit=250';
+      if (sinceId) path += '&since_id=' + sinceId;
+      const { body } = await shopifyGet(shop, token, path);
       const data = JSON.parse(body);
       const orders = data.orders || [];
-      if (orders.length > 0) {
-        await upsertOrders(shop, orders);
-        total += orders.length;
-        console.log(`Synced ${total} orders for ${shop}`);
-        await pool.query('INSERT INTO sync_status (shop, last_synced_at, total_orders) VALUES ($1, NOW(), $2) ON CONFLICT (shop) DO UPDATE SET last_synced_at=NOW(), total_orders=$2', [shop, total]);
-      }
-      const nm = link.match(/page_info=([^>&"]+)[^>]*>;\s*rel="next"/);
-      pageInfo = nm ? nm[1] : null;
+      if (orders.length === 0) break;
+      await upsertOrders(shop, orders);
+      total += orders.length;
+      sinceId = orders[orders.length - 1].id;
+      console.log(`Synced ${total} orders for ${shop}`);
+      await pool.query('INSERT INTO sync_status (shop, last_synced_at, total_orders) VALUES ($1, NOW(), $2) ON CONFLICT (shop) DO UPDATE SET last_synced_at=NOW(), total_orders=$2', [shop, total]);
       if (orders.length < 250) break;
     }
     console.log('Sync complete for', shop, '- total:', total);
@@ -149,14 +146,9 @@ app.get('/refunds', async (req, res) => {
       (row.refunds || []).forEach(r => {
         const rDate = new Date(r.created_at);
         if (rDate >= fromDate && rDate < toDate) {
-          // Sum refund_line_items subtotal (product refunds)
-          (r.refund_line_items || []).forEach(li => {
-            total += parseFloat(li.subtotal) || 0;
-          });
-          // Sum shipping refunds from order_adjustments
-          (r.order_adjustments || []).forEach(adj => {
-            if (adj.kind === 'shipping_refund') {
-              total += Math.abs(parseFloat(adj.amount) || 0);
+          (r.transactions || []).forEach(t => {
+            if (t.kind === 'refund' && t.status === 'success') {
+              total += parseFloat(t.amount) || 0;
             }
           });
         }
