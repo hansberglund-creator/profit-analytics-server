@@ -151,6 +151,10 @@ app.get('/refunds', async (req, res) => {
       (row.refunds || []).forEach(r => {
         const rDate = new Date(r.created_at);
         if (rDate >= fromDate && rDate < toDate) {
+          // Only count refunds that have a real payment transaction
+          // Order-edits have empty transactions array
+          const hasRealTransaction = (r.transactions || []).some(t => t.kind === 'refund' && t.status === 'success');
+          if (!hasRealTransaction) return;
           // Sum refund_line_items (product refunds)
           (r.refund_line_items || []).forEach(li => {
             total += parseFloat(li.subtotal) || 0;
