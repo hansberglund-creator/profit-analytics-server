@@ -199,7 +199,9 @@ app.get('/refunds-debug', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// Transaction fees from Shopify Payments
+// Transaction fees from Shopify Payments payouts
+// Uses /shopify_payments/payouts.json which has summary.charges_fee_amount
+// This matches exactly what Shopify shows in their dashboard
 app.get('/transaction-fees', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   const token = tokenStore[shop];
@@ -207,43 +209,32 @@ app.get('/transaction-fees', async (req, res) => {
   const { from, to } = req.query;
   if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
   try {
-    let total = 0;
-    let pageInfo = null;
-    let isFirst = true;
-    let iterations = 0;
-    while (isFirst || pageInfo) {
-      if (iterations++ > 20) break; // safety limit
-      isFirst = false;
-      let path;
-      if (pageInfo) {
-        path = `/admin/api/2024-01/shopify_payments/balance/transactions.json?limit=250&page_info=${pageInfo}`;
-      } else {
-        const fromDate = from.slice(0, 10);
-        const toDate = to.slice(0, 10);
-        path = `/admin/api/2024-01/shopify_payments/balance/transactions.json?limit=250&since_id=0&test=false`;
-      }
-      const { body, link } = await shopifyGet(shop, token, path);
-      let data;
-      try { data = JSON.parse(body); } catch(e) { break; }
-      if (data.errors) {
-        console.log('Transaction fees API error:', data.errors);
-        return res.json({ total: 0, error: data.errors });
-      }
-      const txns = data.transactions || [];
-      const fromDate = new Date(from);
-      const toDate = new Date(to);
-      txns.forEach(t => {
-        const txDate = new Date(t.processed_at || t.created_at);
-        if (txDate >= fromDate && txDate < toDate) {
-          const fee = parseFloat(t.fee) || 0;
-          if (fee > 0) total += fee;
-        }
-      });
-      const nm = (link || '').match(/page_info=([^>&"]+)[^>]*>;\s*rel="next"/);
-      pageInfo = nm ? nm[1] : null;
-      if (txns.length < 250) break;
+    const dateMin = from.slice(0, 10);
+    const dateMax = to.slice(0, 10);
+    // Fetch all payouts in date range
+    const path = `/admin/api/2024-01/shopify_payments/payouts.json?date_min=${dateMin}&date_max=${dateMax}&limit=250`;
+    const { body } = await shopifyGet(shop, token, path);
+    let data;
+    try { data = JSON.parse(body); } catch(e) {
+      return res.json({ total: 0 });
     }
-    res.json({ total });
+    if (data.errors) {
+      console.log('Payouts API error:', data.errors);
+      return res.json({ total: 0, error: data.errors });
+    }
+    const payouts = data.payouts || [];
+    let total = 0;
+    payouts.forEach(p => {
+      const s = p.summary || {};
+      // charges_fee = fees paid on sales
+      // refunds_fee = fees returned on refunds (negative means returned to merchant)
+      const chargesFee = parseFloat(s.charges_fee_amount) || 0;
+      const refundsFee = parseFloat(s.refunds_fee_amount) || 0;
+      const adjustmentsFee = parseFloat(s.adjustments_fee_amount) || 0;
+      // Net fee = fees on charges minus fees returned on refunds
+      total += chargesFee + refundsFee + adjustmentsFee;
+    });
+    res.json({ total: Math.abs(total) });
   } catch(e) {
     console.error('Transaction fees error:', e.message);
     res.json({ total: 0 });
