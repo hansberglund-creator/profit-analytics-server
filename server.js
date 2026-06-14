@@ -141,8 +141,8 @@ app.get('/refunds', async (req, res) => {
   try {
     // Fetch ALL orders with refunds - refund may be on order from different date
     const result = await pool.query(
-      `SELECT refunds FROM orders WHERE shop=$1 AND refunds != '[]'::jsonb`,
-      [shop]
+      `SELECT refunds, processed_at FROM orders WHERE shop=$1 AND refunds != '[]'::jsonb AND processed_at >= $2 AND processed_at < $3`,
+      [shop, from, to]
     );
     let total = 0;
     const fromDate = new Date(from);
@@ -152,10 +152,10 @@ app.get('/refunds', async (req, res) => {
         const rDate = new Date(r.created_at);
         if (rDate >= fromDate && rDate < toDate) {
           // Sum refund_line_items (product refunds)
-          // Skip ReConvert upsell fake refunds - they always have total_discount > 0
+          // Skip ReConvert upsells and order-edits - they have discount_allocations
           (r.refund_line_items || []).forEach(li => {
-            const discount = parseFloat(li.line_item && li.line_item.total_discount) || 0;
-            if (discount > 0) return;
+            const allocations = (li.line_item && li.line_item.discount_allocations) || [];
+            if (allocations.length > 0) return;
             total += parseFloat(li.subtotal) || 0;
           });
           // Sum order_adjustments
