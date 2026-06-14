@@ -111,7 +111,7 @@ async function syncAllOrders(shop, token) {
   let sinceId = null, total = 0;
   try {
     while (true) {
-      let path = '/admin/api/2024-01/orders.json?status=any&limit=250';
+      let path = '/admin/api/2024-01/orders.json?status=any&limit=250&created_at_min=2020-01-01T00:00:00Z';
       if (sinceId) path += '&since_id=' + sinceId;
       const { body } = await shopifyGet(shop, token, path);
       const data = JSON.parse(body);
@@ -180,9 +180,20 @@ app.get('/refunds', async (req, res) => {
       (row.refunds || []).forEach(r => {
         const rDate = new Date(r.created_at);
         if (rDate >= fromDate && rDate < toDate) {
-          (r.transactions || []).forEach(t => {
-            if (t.kind === 'refund' && t.status === 'success') {
-              total += parseFloat(t.amount) || 0;
+          // Sum refund_line_items (product refunds)
+          (r.refund_line_items || []).forEach(li => {
+            total += parseFloat(li.subtotal) || 0;
+          });
+          // Sum order_adjustments
+          (r.order_adjustments || []).forEach(adj => {
+            if (adj.kind === 'shipping_refund') {
+              total += Math.abs(parseFloat(adj.amount) || 0);
+            } else if (adj.kind === 'refund_discrepancy') {
+              const reason = adj.reason || '';
+              if (!reason.includes('Pending')) {
+                const amt = parseFloat(adj.amount) || 0;
+                if (amt < 0) total += Math.abs(amt);
+              }
             }
           });
         }
