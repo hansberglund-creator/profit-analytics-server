@@ -148,10 +148,10 @@ app.get('/refunds', async (req, res) => {
         const rDate = new Date(r.created_at);
         if (rDate >= fromDate && rDate < toDate) {
           // Sum refund_line_items (product refunds)
-          // Skip ReConvert upsell fake refunds - they always have total_discount > 0
+          // Skip ReConvert upsell fake refunds - they use fulfillment_service: "manual"
           (r.refund_line_items || []).forEach(li => {
-            const discount = parseFloat(li.line_item && li.line_item.total_discount) || 0;
-            if (discount > 0) return;
+            const fs = li.line_item && li.line_item.fulfillment_service;
+            if (fs === 'manual') return;
             total += parseFloat(li.subtotal) || 0;
           });
           // Sum order_adjustments
