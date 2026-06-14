@@ -141,16 +141,19 @@ app.get('/refunds', async (req, res) => {
   try {
     // Fetch ALL orders with refunds - refund may be on order from different date
     const result = await pool.query(
-      `SELECT refunds FROM orders WHERE shop=$1 AND refunds != '[]'::jsonb`,
+      `SELECT refunds, processed_at FROM orders WHERE shop=$1 AND refunds != '[]'::jsonb`,
       [shop]
     );
     let total = 0;
     const fromDate = new Date(from);
     const toDate = new Date(to);
     result.rows.forEach(row => {
+      const orderProcessedAt = new Date(row.processed_at);
       (row.refunds || []).forEach(r => {
         const rDate = new Date(r.created_at);
-        if (rDate >= fromDate && rDate < toDate) {
+        // Only count refunds on orders processed BEFORE this period
+        // Orders processed within period already have refunds in current_total_price
+        if (rDate >= fromDate && rDate < toDate && orderProcessedAt < fromDate) {
           // Sum refund_line_items (product refunds)
           // Skip ReConvert upsell fake refunds - they always have total_discount > 0
           (r.refund_line_items || []).forEach(li => {
@@ -191,9 +194,12 @@ app.get('/refunds-debug', async (req, res) => {
     const toDate = to ? new Date(to) : new Date('2026-06-12T22:00:00Z');
     const matches = [];
     result.rows.forEach(row => {
+      const orderProcessedAt = new Date(row.processed_at);
       (row.refunds || []).forEach(r => {
         const rDate = new Date(r.created_at);
-        if (rDate >= fromDate && rDate < toDate) {
+        // Only count refunds on orders processed BEFORE this period
+        // Orders processed within period already have refunds in current_total_price
+        if (rDate >= fromDate && rDate < toDate && orderProcessedAt < fromDate) {
           matches.push({ order_id: row.id, created_at: r.created_at, refund_line_items: r.refund_line_items, order_adjustments: r.order_adjustments });
         }
       });
