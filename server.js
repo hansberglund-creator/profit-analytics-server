@@ -166,12 +166,24 @@ app.get('/refunds', async (req, res) => {
 // Debug endpoint to inspect refund structure
 app.get('/refunds-debug', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
+  const { from, to } = req.query;
   try {
     const result = await pool.query(
-      `SELECT id, refunds FROM orders WHERE shop=$1 AND refunds != '[]'::jsonb LIMIT 3`,
+      `SELECT id, refunds FROM orders WHERE shop=$1 AND refunds != '[]'::jsonb`,
       [shop]
     );
-    res.json(result.rows);
+    const fromDate = from ? new Date(from) : new Date('2026-06-10T22:00:00Z');
+    const toDate = to ? new Date(to) : new Date('2026-06-12T22:00:00Z');
+    const matches = [];
+    result.rows.forEach(row => {
+      (row.refunds || []).forEach(r => {
+        const rDate = new Date(r.created_at);
+        if (rDate >= fromDate && rDate < toDate) {
+          matches.push({ order_id: row.id, created_at: r.created_at, refund_line_items: r.refund_line_items, order_adjustments: r.order_adjustments });
+        }
+      });
+    });
+    res.json(matches);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
