@@ -77,8 +77,12 @@ async function syncAllOrders(shop, token) {
   let sinceId = null, total = 0;
   try {
     while (true) {
-      let path = '/admin/api/2024-01/orders.json?status=any&limit=250&created_at_min=2020-01-01T00:00:00Z';
-      if (sinceId) path += '&since_id=' + sinceId;
+      let path;
+      if (sinceId) {
+        path = '/admin/api/2024-01/orders.json?status=any&limit=250&order=id+asc&since_id=' + sinceId;
+      } else {
+        path = '/admin/api/2024-01/orders.json?status=any&limit=250&order=id+asc&created_at_min=2020-01-01T00:00:00Z';
+      }
       const { body } = await shopifyGet(shop, token, path);
       const data = JSON.parse(body);
       const orders = data.orders || [];
