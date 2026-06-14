@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3001;
 const CLIENT_ID = process.env.SHOPIFY_CLIENT_ID || '32e267c453b2a6fa1ae82f355d413b8e';
 const CLIENT_SECRET = process.env.SHOPIFY_CLIENT_SECRET || '';
 const BASE_URL = process.env.BASE_URL || 'https://profit-analytics-server-production.up.railway.app';
-const SCOPES = 'read_orders,read_products,read_all_orders';
+const SCOPES = 'read_orders,read_products,read_all_orders,read_shopify_payments';
 const TOKEN_FILE = '/tmp/tokens.json';
 
 // Load tokens
@@ -199,7 +199,45 @@ app.get('/refunds-debug', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// Sync status
+// Transaction fees from Shopify Payments
+app.get('/transaction-fees', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (!shop || !token) return res.status(401).json({ error: 'Not authenticated' });
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
+  try {
+    let total = 0;
+    let pageInfo = null;
+    let firstPage = true;
+    while (firstPage || pageInfo) {
+      firstPage = false;
+      let path;
+      if (pageInfo) {
+        path = `/admin/api/2024-01/shopify_payments/balance/transactions.json?limit=250&page_info=${pageInfo}`;
+      } else {
+        path = `/admin/api/2024-01/shopify_payments/balance/transactions.json?limit=250&payout_date_min=${from.slice(0,10)}&payout_date_max=${to.slice(0,10)}`;
+      }
+      const { body, link } = await shopifyGet(shop, token, path);
+      const data = JSON.parse(body);
+      if (data.errors) break;
+      const txns = data.transactions || [];
+      txns.forEach(t => {
+        // fee is the transaction cost charged by Shopify Payments
+        const fee = parseFloat(t.fee) || 0;
+        if (fee > 0) total += fee;
+      });
+      const nm = link.match(/page_info=([^>&"]+)[^>]*>;\s*rel="next"/);
+      pageInfo = nm ? nm[1] : null;
+      if (txns.length < 250) break;
+    }
+    res.json({ total });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
 app.get('/sync-status', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   if (!shop) return res.status(401).json({ error: 'Not authenticated' });
