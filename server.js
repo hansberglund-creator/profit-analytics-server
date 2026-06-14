@@ -147,21 +147,10 @@ app.get('/refunds', async (req, res) => {
     let total = 0;
     const fromDate = new Date(from);
     const toDate = new Date(to);
-    const RECONVERT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
     result.rows.forEach(row => {
-      const orderCreatedAt = new Date(row.created_at);
-      const orderProcessedAt = new Date(row.processed_at);
-      // Check if ANY refund on this order is a ReConvert refund
-      const orderIsNew = orderProcessedAt >= fromDate && orderProcessedAt < toDate;
-      const hasReConvert = orderIsNew && (row.refunds || []).some(r => {
-        const rDate = new Date(r.created_at);
-        const diffMs = rDate - orderCreatedAt;
-        return diffMs >= 0 && diffMs <= RECONVERT_WINDOW_MS;
-      });
       (row.refunds || []).forEach(r => {
         const rDate = new Date(r.created_at);
-        // Skip ALL refunds on orders that have ReConvert refunds
-        if (rDate >= fromDate && rDate < toDate && !hasReConvert) {
+        if (rDate >= fromDate && rDate < toDate) {
           // Sum refund_line_items (product refunds)
           (r.refund_line_items || []).forEach(li => {
             total += parseFloat(li.subtotal) || 0;
@@ -198,21 +187,10 @@ app.get('/refunds-debug', async (req, res) => {
     const fromDate = from ? new Date(from) : new Date('2026-06-10T22:00:00Z');
     const toDate = to ? new Date(to) : new Date('2026-06-12T22:00:00Z');
     const matches = [];
-    const RECONVERT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
     result.rows.forEach(row => {
-      const orderCreatedAt = new Date(row.created_at);
-      const orderProcessedAt = new Date(row.processed_at);
-      // Check if ANY refund on this order is a ReConvert refund
-      const orderIsNew = orderProcessedAt >= fromDate && orderProcessedAt < toDate;
-      const hasReConvert = orderIsNew && (row.refunds || []).some(r => {
-        const rDate = new Date(r.created_at);
-        const diffMs = rDate - orderCreatedAt;
-        return diffMs >= 0 && diffMs <= RECONVERT_WINDOW_MS;
-      });
       (row.refunds || []).forEach(r => {
         const rDate = new Date(r.created_at);
-        // Skip ALL refunds on orders that have ReConvert refunds
-        if (rDate >= fromDate && rDate < toDate && !hasReConvert) {
+        if (rDate >= fromDate && rDate < toDate) {
           matches.push({ order_id: row.id, created_at: r.created_at, refund_line_items: r.refund_line_items, order_adjustments: r.order_adjustments });
         }
       });
