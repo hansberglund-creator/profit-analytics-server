@@ -146,9 +146,14 @@ app.get('/refunds', async (req, res) => {
       (row.refunds || []).forEach(r => {
         const rDate = new Date(r.created_at);
         if (rDate >= fromDate && rDate < toDate) {
-          (r.transactions || []).forEach(t => {
-            if (t.kind === 'refund' && t.status === 'success') {
-              total += parseFloat(t.amount) || 0;
+          // Sum refund_line_items (product refunds)
+          (r.refund_line_items || []).forEach(li => {
+            total += parseFloat(li.subtotal) || 0;
+          });
+          // Sum shipping refunds
+          (r.order_adjustments || []).forEach(adj => {
+            if (adj.kind === 'shipping_refund') {
+              total += Math.abs(parseFloat(adj.amount) || 0);
             }
           });
         }
