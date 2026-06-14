@@ -141,19 +141,21 @@ app.get('/refunds', async (req, res) => {
   try {
     // Fetch ALL orders with refunds - refund may be on order from different date
     const result = await pool.query(
-      `SELECT refunds, created_at FROM orders WHERE shop=$1 AND refunds != '[]'::jsonb`,
+      `SELECT refunds, created_at, processed_at FROM orders WHERE shop=$1 AND refunds != '[]'::jsonb`,
       [shop]
     );
     let total = 0;
     const fromDate = new Date(from);
     const toDate = new Date(to);
-    const RECONVERT_WINDOW_MS = 20 * 60 * 1000; // 20 minutes
+    const RECONVERT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
     result.rows.forEach(row => {
       const orderCreatedAt = new Date(row.created_at);
+      const orderProcessedAt = new Date(row.processed_at);
       (row.refunds || []).forEach(r => {
         const rDate = new Date(r.created_at);
-        // Skip ReConvert refunds - created within 20 min of order
-        const isReConvert = (rDate - orderCreatedAt) <= RECONVERT_WINDOW_MS;
+        const orderIsNew = orderProcessedAt >= fromDate && orderProcessedAt < toDate;
+        const diffMs = rDate - orderCreatedAt;
+        const isReConvert = orderIsNew && diffMs >= 0 && diffMs <= RECONVERT_WINDOW_MS;
         if (rDate >= fromDate && rDate < toDate && !isReConvert) {
           // Sum refund_line_items (product refunds)
           (r.refund_line_items || []).forEach(li => {
@@ -185,19 +187,21 @@ app.get('/refunds-debug', async (req, res) => {
   const { from, to } = req.query;
   try {
     const result = await pool.query(
-      `SELECT id, refunds FROM orders WHERE shop=$1 AND refunds != '[]'::jsonb`,
+      `SELECT id, refunds, created_at, processed_at FROM orders WHERE shop=$1 AND refunds != '[]'::jsonb`,
       [shop]
     );
     const fromDate = from ? new Date(from) : new Date('2026-06-10T22:00:00Z');
     const toDate = to ? new Date(to) : new Date('2026-06-12T22:00:00Z');
     const matches = [];
-    const RECONVERT_WINDOW_MS = 20 * 60 * 1000; // 20 minutes
+    const RECONVERT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
     result.rows.forEach(row => {
       const orderCreatedAt = new Date(row.created_at);
+      const orderProcessedAt = new Date(row.processed_at);
       (row.refunds || []).forEach(r => {
         const rDate = new Date(r.created_at);
-        // Skip ReConvert refunds - created within 20 min of order
-        const isReConvert = (rDate - orderCreatedAt) <= RECONVERT_WINDOW_MS;
+        const orderIsNew = orderProcessedAt >= fromDate && orderProcessedAt < toDate;
+        const diffMs = rDate - orderCreatedAt;
+        const isReConvert = orderIsNew && diffMs >= 0 && diffMs <= RECONVERT_WINDOW_MS;
         if (rDate >= fromDate && rDate < toDate && !isReConvert) {
           matches.push({ order_id: row.id, created_at: r.created_at, refund_line_items: r.refund_line_items, order_adjustments: r.order_adjustments });
         }
