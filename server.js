@@ -154,10 +154,16 @@ app.get('/refunds', async (req, res) => {
             if (discount > 0) return;
             total += parseFloat(li.subtotal) || 0;
           });
-          // Sum shipping refunds from order_adjustments
+          // Sum order_adjustments
           (r.order_adjustments || []).forEach(adj => {
             if (adj.kind === 'shipping_refund') {
               total += Math.abs(parseFloat(adj.amount) || 0);
+            } else if (adj.kind === 'refund_discrepancy') {
+              const reason = adj.reason || '';
+              if (!reason.includes('Pending')) {
+                const amt = parseFloat(adj.amount) || 0;
+                if (amt < 0) total += Math.abs(amt);
+              }
             }
           });
         }
