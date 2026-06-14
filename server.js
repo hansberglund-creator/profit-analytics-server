@@ -156,6 +156,7 @@ app.get('/refunds', async (req, res) => {
         const orderIsNew = orderProcessedAt >= fromDate && orderProcessedAt < toDate;
         const diffMs = rDate - orderCreatedAt;
         const isReConvert = orderIsNew && diffMs >= 0 && diffMs <= RECONVERT_WINDOW_MS;
+        console.log('order_created:', row.created_at, 'refund_created:', r.created_at, 'diffMs:', diffMs, 'orderIsNew:', orderIsNew, 'isReConvert:', isReConvert);
         if (rDate >= fromDate && rDate < toDate && !isReConvert) {
           // Sum refund_line_items (product refunds)
           (r.refund_line_items || []).forEach(li => {
@@ -202,6 +203,7 @@ app.get('/refunds-debug', async (req, res) => {
         const orderIsNew = orderProcessedAt >= fromDate && orderProcessedAt < toDate;
         const diffMs = rDate - orderCreatedAt;
         const isReConvert = orderIsNew && diffMs >= 0 && diffMs <= RECONVERT_WINDOW_MS;
+        console.log('order_created:', row.created_at, 'refund_created:', r.created_at, 'diffMs:', diffMs, 'orderIsNew:', orderIsNew, 'isReConvert:', isReConvert);
         if (rDate >= fromDate && rDate < toDate && !isReConvert) {
           matches.push({ order_id: row.id, created_at: r.created_at, refund_line_items: r.refund_line_items, order_adjustments: r.order_adjustments });
         }
