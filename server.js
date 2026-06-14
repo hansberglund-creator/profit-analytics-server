@@ -156,10 +156,7 @@ app.get('/refunds', async (req, res) => {
         const isReConvert = (rDate - orderCreatedAt) <= RECONVERT_WINDOW_MS;
         if (rDate >= fromDate && rDate < toDate && !isReConvert) {
           // Sum refund_line_items (product refunds)
-          // Skip ReConvert upsells and order-edits - they have discount_allocations
           (r.refund_line_items || []).forEach(li => {
-            const allocations = (li.line_item && li.line_item.discount_allocations) || [];
-            if (allocations.length > 0) return;
             total += parseFloat(li.subtotal) || 0;
           });
           // Sum order_adjustments
