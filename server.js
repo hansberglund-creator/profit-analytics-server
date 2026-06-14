@@ -135,6 +135,7 @@ app.get('/refunds', async (req, res) => {
   if (!shop) return res.status(401).json({ error: 'Not authenticated' });
   const { from, to } = req.query;
   try {
+    // Fetch ALL orders with refunds - refund may be on order from different date
     const result = await pool.query(
       `SELECT refunds FROM orders WHERE shop=$1 AND refunds != '[]'::jsonb`,
       [shop]
@@ -142,16 +143,10 @@ app.get('/refunds', async (req, res) => {
     let total = 0;
     const fromDate = new Date(from);
     const toDate = new Date(to);
-    function toSthlmDateNum(d) {
-      const s = new Date(d.toLocaleString('en-US', {timeZone: 'Europe/Stockholm'}));
-      return s.getFullYear()*10000 + (s.getMonth()+1)*100 + s.getDate();
-    }
-    const fromNum = toSthlmDateNum(fromDate);
-    const toNum = toSthlmDateNum(toDate);
     result.rows.forEach(row => {
       (row.refunds || []).forEach(r => {
-        const rNum = toSthlmDateNum(new Date(r.created_at));
-        if (rNum >= fromNum && rNum < toNum) {
+        const rDate = new Date(r.created_at);
+        if (rDate >= fromDate && rDate < toDate) {
           (r.refund_line_items || []).forEach(li => {
             total += parseFloat(li.subtotal) || 0;
           });
@@ -164,6 +159,19 @@ app.get('/refunds', async (req, res) => {
       });
     });
     res.json({ total });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+
+// Debug endpoint to inspect refund structure
+app.get('/refunds-debug', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  try {
+    const result = await pool.query(
+      `SELECT id, refunds FROM orders WHERE shop=$1 AND refunds != '[]'::jsonb LIMIT 3`,
+      [shop]
+    );
+    res.json(result.rows);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
