@@ -152,7 +152,9 @@ app.get('/refunds', async (req, res) => {
         const rDate = new Date(r.created_at);
         if (rDate >= fromDate && rDate < toDate) {
           // Sum refund_line_items (product refunds)
+          // Skip order-edits - they have restock_type: no_restock
           (r.refund_line_items || []).forEach(li => {
+            if (li.restock_type === 'no_restock') return;
             total += parseFloat(li.subtotal) || 0;
           });
           // Sum order_adjustments
