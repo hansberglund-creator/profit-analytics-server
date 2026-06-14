@@ -152,9 +152,7 @@ app.get('/refunds', async (req, res) => {
         const rDate = new Date(r.created_at);
         if (rDate >= fromDate && rDate < toDate) {
           // Sum refund_line_items (product refunds)
-          // Skip order-edits - they have restock_type: no_restock
           (r.refund_line_items || []).forEach(li => {
-            if (li.restock_type === 'no_restock') return;
             total += parseFloat(li.subtotal) || 0;
           });
           // Sum order_adjustments
@@ -193,7 +191,7 @@ app.get('/refunds-debug', async (req, res) => {
       (row.refunds || []).forEach(r => {
         const rDate = new Date(r.created_at);
         if (rDate >= fromDate && rDate < toDate) {
-          matches.push({ order_id: row.id, created_at: r.created_at, refund_line_items: r.refund_line_items, order_adjustments: r.order_adjustments });
+          matches.push({ order_id: row.id, created_at: r.created_at, refund_line_items: r.refund_line_items, order_adjustments: r.order_adjustments, transactions: r.transactions });
         }
       });
     });
