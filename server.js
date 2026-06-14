@@ -147,14 +147,22 @@ app.get('/refunds', async (req, res) => {
       (row.refunds || []).forEach(r => {
         const rDate = new Date(r.created_at);
         if (rDate >= fromDate && rDate < toDate) {
+          // Sum refund_line_items (product refunds)
           (r.refund_line_items || []).forEach(li => {
             total += parseFloat(li.subtotal) || 0;
           });
+          // Sum order_adjustments - netting refund_discrepancy gives actual refund amount
+          // Only count negative amounts (debits) from refund_discrepancy
+          let adjNet = 0;
           (r.order_adjustments || []).forEach(adj => {
-            if (adj.kind === 'shipping_refund') {
+            if (adj.kind === 'refund_discrepancy') {
+              adjNet += parseFloat(adj.amount) || 0;
+            } else if (adj.kind === 'shipping_refund') {
               total += Math.abs(parseFloat(adj.amount) || 0);
             }
           });
+          // adjNet will be negative (e.g. -39), so abs it
+          if (adjNet < 0) total += Math.abs(adjNet);
         }
       });
     });
