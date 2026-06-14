@@ -148,21 +148,17 @@ app.get('/refunds', async (req, res) => {
         const rDate = new Date(r.created_at);
         if (rDate >= fromDate && rDate < toDate) {
           // Sum refund_line_items (product refunds)
+          // Skip items where current_quantity=0 (ReConvert upsells that were never paid)
           (r.refund_line_items || []).forEach(li => {
+            if (li.line_item && li.line_item.current_quantity === 0) return;
             total += parseFloat(li.subtotal) || 0;
           });
-          // Sum order_adjustments - netting refund_discrepancy gives actual refund amount
-          // Only count negative amounts (debits) from refund_discrepancy
-          let adjNet = 0;
+          // Sum shipping refunds from order_adjustments
           (r.order_adjustments || []).forEach(adj => {
-            if (adj.kind === 'refund_discrepancy') {
-              adjNet += parseFloat(adj.amount) || 0;
-            } else if (adj.kind === 'shipping_refund') {
+            if (adj.kind === 'shipping_refund') {
               total += Math.abs(parseFloat(adj.amount) || 0);
             }
           });
-          // adjNet will be negative (e.g. -39), so abs it
-          if (adjNet < 0) total += Math.abs(adjNet);
         }
       });
     });
