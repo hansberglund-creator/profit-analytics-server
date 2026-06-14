@@ -220,12 +220,52 @@ app.get('/sync-status', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// Delta sync - updates recently modified orders
+async function syncRecentOrders(shop, token) {
+  const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+  let pageInfo = null, first = true, total = 0;
+  try {
+    while (first || pageInfo) {
+      first = false;
+      let path = '/admin/api/2024-01/orders.json?status=any&limit=250&updated_at_min=' + since;
+      if (pageInfo) path = '/admin/api/2024-01/orders.json?limit=250&page_info=' + pageInfo;
+      const { body, link } = await shopifyGet(shop, token, path);
+      const data = JSON.parse(body);
+      const orders = data.orders || [];
+      if (orders.length === 0) break;
+      await upsertOrders(shop, orders);
+      total += orders.length;
+      const nm = link.match(/page_info=([^>&"]+)[^>]*>;\s*rel="next"/);
+      pageInfo = nm ? nm[1] : null;
+      if (orders.length < 250) break;
+    }
+    console.log('Delta sync complete - updated', total, 'orders');
+  } catch(e) { console.error('Delta sync error:', e.message); }
+}
+
+// Run delta sync every 30 minutes
+setInterval(() => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (shop && token) syncRecentOrders(shop, token);
+}, 30 * 60 * 1000);
+
+// Manual delta sync
+app.post('/sync-recent', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (!shop || !token) return res.status(401).json({ error: 'Not authenticated' });
+  syncRecentOrders(shop, token);
+  res.json({ message: 'Delta sync started' });
+});
+
 // Manual resync
 app.post('/sync', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   const token = tokenStore[shop];
   if (!shop || !token) return res.status(401).json({ error: 'Not authenticated' });
   syncAllOrders(shop, token);
+  syncRecentOrders(shop, token);
   res.json({ message: 'Sync started' });
 });
 
