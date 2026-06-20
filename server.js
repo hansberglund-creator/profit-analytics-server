@@ -188,8 +188,8 @@ app.post('/meta-disconnect', async (req, res) => {
 app.get('/meta-spend', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   if (!shop) return res.status(401).json({ error: 'Not authenticated' });
-  const { from, to } = req.query;
-  if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
+  const { since, until } = req.query;
+  if (!since || !until) return res.status(400).json({ error: 'Missing since/until' });
   try {
     const result = await pool.query('SELECT access_token, ad_account_id, token_expires_at FROM meta_accounts WHERE shop=$1', [shop]);
     if (result.rows.length === 0) return res.json({ total: 0, connected: false });
@@ -199,13 +199,8 @@ app.get('/meta-spend', async (req, res) => {
       return res.json({ total: 0, connected: true, expired: true, error: 'Meta-tokenet har gått ut. Återanslut.' });
     }
 
-    const since = from.slice(0, 10);
-    // Meta's time_range.until is INCLUSIVE, but our 'to' date from the frontend is EXCLUSIVE
-    // (it represents "midnight at the start of the day after the period ends", matching the Shopify query logic).
-    // So we subtract one day to get the correct inclusive end date for Meta.
-    const toDate = new Date(to);
-    toDate.setUTCDate(toDate.getUTCDate() - 1);
-    const until = toDate.toISOString().slice(0, 10);
+    // since/until are already plain YYYY-MM-DD strings in the shop's local calendar days,
+    // exactly as Meta's time_range expects (both inclusive) - no timezone conversion needed here.
     const timeRange = encodeURIComponent(JSON.stringify({ since, until }));
     const insights = await httpsGetJson('graph.facebook.com', `/v19.0/${ad_account_id}/insights?fields=spend&time_range=${timeRange}&time_increment=1&access_token=${access_token}`);
 
