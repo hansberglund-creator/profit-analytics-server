@@ -341,9 +341,12 @@ app.get('/refunds-debug', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// Transaction fees from Shopify Payments payouts
-// Uses /shopify_payments/payouts.json which has summary.charges_fee_amount
-// This matches exactly what Shopify shows in their dashboard
+// Transaction fees from Shopify Payments balance transactions.
+// Uses /shopify_payments/balance/transactions.json which has a per-transaction fee
+// tied to the order's own transaction date (processed_at), avoiding the payout-timing
+// mismatch where a fee could land in a different period than the sale it belongs to.
+// Shopify's own date_min/date_max filters on this endpoint are unreliable, so we fetch
+// everything (paginated) and filter by processed_at ourselves, same pattern as /refunds.
 app.get('/transaction-fees', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   const token = tokenStore[shop];
@@ -351,35 +354,54 @@ app.get('/transaction-fees', async (req, res) => {
   const { from, to } = req.query;
   if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
   try {
-    const dateMin = from.slice(0, 10);
-    const dateMax = to.slice(0, 10);
-    // Fetch all payouts in date range
-    const path = `/admin/api/2024-01/shopify_payments/payouts.json?date_min=${dateMin}&date_max=${dateMax}&limit=250`;
-    const { body } = await shopifyGet(shop, token, path);
-    let data;
-    try { data = JSON.parse(body); } catch(e) {
-      return res.json({ total: 0 });
-    }
-    if (data.errors) {
-      console.log('Payouts API error:', data.errors);
-      return res.json({ total: 0, error: data.errors });
-    }
-    const payouts = data.payouts || [];
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
     let total = 0;
-    payouts.forEach(p => {
-      const s = p.summary || {};
-      // charges_fee = fees paid on sales
-      // refunds_fee = fees returned on refunds (negative means returned to merchant)
-      const chargesFee = parseFloat(s.charges_fee_amount) || 0;
-      const refundsFee = parseFloat(s.refunds_fee_amount) || 0;
-      const adjustmentsFee = parseFloat(s.adjustments_fee_amount) || 0;
-      // Net fee = fees on charges minus fees returned on refunds
-      total += chargesFee + refundsFee + adjustmentsFee;
-    });
+    let pageInfo = null;
+    let first = true;
+    let pages = 0;
+    const MAX_PAGES = 40; // safety cap (250 per page = up to 10,000 transactions scanned)
+
+    while (first || pageInfo) {
+      first = false;
+      let path = `/admin/api/2024-01/shopify_payments/balance/transactions.json?limit=250`;
+      if (pageInfo) path = `/admin/api/2024-01/shopify_payments/balance/transactions.json?limit=250&page_info=${pageInfo}`;
+      const { body, link } = await shopifyGet(shop, token, path);
+      let data;
+      try { data = JSON.parse(body); } catch(e) { break; }
+      if (data.errors) {
+        console.log('Balance transactions API error:', data.errors);
+        return res.json({ total: 0, error: JSON.stringify(data.errors) });
+      }
+      const txs = data.transactions || [];
+      if (txs.length === 0) break;
+
+      // List is ordered newest-first by processing time. We scan the whole page (rather
+      // than break on the first out-of-range item) since ordering edge cases could exist,
+      // but we stop requesting further pages once an entire page is older than 'from'.
+      let allOlderThanFrom = true;
+      for (const t of txs) {
+        const processedAt = new Date(t.processed_at);
+        if (processedAt >= fromDate && processedAt < toDate) {
+          // fee is the amount Shopify Payments charged for this transaction.
+          // For debit (sale) transactions this is positive; for refund-related entries
+          // the fee may be returned (negative) - summing as-is gives the correct net fee.
+          total += parseFloat(t.fee) || 0;
+        }
+        if (processedAt >= fromDate) allOlderThanFrom = false;
+      }
+
+      pages++;
+      if (pages >= MAX_PAGES) { res.json({ total: Math.abs(total), incomplete: true, error: 'Nådde maxgräns för sidor - resultatet kan vara inkomplett för långa perioder' }); return; }
+      if (allOlderThanFrom) break; // remaining (older) pages can't contain anything newer
+      const nm = link.match(/page_info=([^>&"]+)[^>]*>;\s*rel="next"/);
+      pageInfo = nm ? nm[1] : null;
+    }
+
     res.json({ total: Math.abs(total) });
   } catch(e) {
     console.error('Transaction fees error:', e.message);
-    res.json({ total: 0 });
+    res.json({ total: 0, error: e.message });
   }
 });
 
