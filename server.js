@@ -13,6 +13,12 @@ const BASE_URL = process.env.BASE_URL || 'https://profit-analytics-server-produc
 const SCOPES = 'read_orders,read_products,read_all_orders,read_shopify_payments_payouts';
 const TOKEN_FILE = '/tmp/tokens.json';
 
+// Meta (Facebook) OAuth config
+const META_APP_ID = process.env.META_APP_ID || '2204919553684262';
+const META_APP_SECRET = process.env.META_APP_SECRET || '';
+const META_REDIRECT_URI = BASE_URL + '/auth/meta/callback';
+const META_SCOPES = 'ads_read';
+
 // Load tokens
 let tokenStore = {};
 try { tokenStore = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8')); } catch(e) {}
@@ -43,6 +49,14 @@ async function initDB() {
       last_synced_at TIMESTAMPTZ,
       total_orders INT DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS meta_accounts (
+      shop VARCHAR(255) PRIMARY KEY,
+      access_token TEXT NOT NULL,
+      ad_account_id VARCHAR(64) NOT NULL,
+      ad_account_name VARCHAR(255),
+      token_expires_at TIMESTAMPTZ,
+      connected_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 }
 
@@ -69,6 +83,134 @@ app.get('/auth/callback', async (req, res) => {
     syncAllOrders(shop, data.access_token);
     res.send(`<html><body style="background:#0f1117;color:#22c55e;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column"><h1>✓ Ansluten!</h1><p style="color:#9ca3b8;margin-top:12px">Synkar ordrar i bakgrunden. Stäng denna flik.</p></body></html>`);
   } catch(e) { res.status(500).send('Error: ' + e.message); }
+});
+
+// Meta OAuth - step 1: redirect to Facebook login
+app.get('/auth/meta', (req, res) => {
+  const shop = req.query.shop || Object.keys(tokenStore)[0];
+  if (!shop) return res.status(400).send('Anslut Shopify-butiken först');
+  const state = Buffer.from(JSON.stringify({ shop })).toString('base64');
+  const url = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(META_REDIRECT_URI)}&scope=${META_SCOPES}&state=${encodeURIComponent(state)}`;
+  res.redirect(url);
+});
+
+// Meta OAuth - step 2: handle callback, exchange code for long-lived token
+app.get('/auth/meta/callback', async (req, res) => {
+  const { code, state, error, error_description } = req.query;
+  if (error) return res.status(400).send('Meta-fel: ' + (error_description || error));
+  if (!code) return res.status(400).send('Missing code');
+  let shop;
+  try { shop = JSON.parse(Buffer.from(state, 'base64').toString()).shop; } catch(e) { return res.status(400).send('Invalid state'); }
+  try {
+    // Exchange code for short-lived token
+    const shortLived = await httpsGetJson('graph.facebook.com', `/v19.0/oauth/access_token?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(META_REDIRECT_URI)}&client_secret=${META_APP_SECRET}&code=${code}`);
+    if (!shortLived.access_token) return res.status(400).send('No token from Meta: ' + JSON.stringify(shortLived));
+
+    // Exchange short-lived for long-lived token (~60 days)
+    const longLived = await httpsGetJson('graph.facebook.com', `/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&fb_exchange_token=${shortLived.access_token}`);
+    const finalToken = longLived.access_token || shortLived.access_token;
+    const expiresInSec = longLived.expires_in || shortLived.expires_in || 5184000; // default 60 days
+    const expiresAt = new Date(Date.now() + expiresInSec * 1000);
+
+    // Fetch ad accounts so the user can pick one
+    const accountsResp = await httpsGetJson('graph.facebook.com', `/v19.0/me/adaccounts?fields=name,account_id&access_token=${finalToken}`);
+    const accounts = accountsResp.data || [];
+
+    if (accounts.length === 0) {
+      return res.status(400).send('Inga ad-konton hittades för detta Facebook-konto.');
+    }
+
+    // If only one account, connect it directly. Otherwise show a picker.
+    if (accounts.length === 1) {
+      await pool.query(`
+        INSERT INTO meta_accounts (shop, access_token, ad_account_id, ad_account_name, token_expires_at, connected_at)
+        VALUES ($1,$2,$3,$4,$5,NOW())
+        ON CONFLICT (shop) DO UPDATE SET access_token=EXCLUDED.access_token, ad_account_id=EXCLUDED.ad_account_id, ad_account_name=EXCLUDED.ad_account_name, token_expires_at=EXCLUDED.token_expires_at, connected_at=NOW()
+      `, [shop, finalToken, accounts[0].id, accounts[0].name, expiresAt]);
+      return res.send(`<html><body style="background:#0f1117;color:#22c55e;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column"><h1>✓ Meta Ads anslutet!</h1><p style="color:#9ca3b8;margin-top:12px">Konto: ${accounts[0].name}. Stäng denna flik.</p></body></html>`);
+    }
+
+    // Multiple accounts - let user pick
+    const options = accounts.map(a => `<option value="${a.id}">${a.name} (${a.id})</option>`).join('');
+    res.send(`<html><body style="background:#0f1117;color:#e8eef8;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column;gap:16px">
+      <h1>Välj ad-konto</h1>
+      <select id="acc" style="padding:10px;border-radius:8px;font-size:14px;min-width:300px">${options}</select>
+      <button onclick="confirmAccount()" style="padding:10px 20px;border-radius:8px;background:#4a90d9;color:#fff;border:none;cursor:pointer;font-size:14px">Anslut detta konto</button>
+      <script>
+        async function confirmAccount(){
+          const id = document.getElementById('acc').value;
+          const name = document.getElementById('acc').selectedOptions[0].text;
+          await fetch('/auth/meta/select-account?shop=${encodeURIComponent(shop)}&account_id='+encodeURIComponent(id)+'&account_name='+encodeURIComponent(name)+'&token=${encodeURIComponent(finalToken)}&expires_at=${encodeURIComponent(expiresAt.toISOString())}');
+          document.body.innerHTML = '<h1 style="color:#22c55e">✓ Anslutet! Stäng denna flik.</h1>';
+        }
+      </script>
+    </body></html>`);
+  } catch(e) { res.status(500).send('Error: ' + e.message); }
+});
+
+// Meta OAuth - step 3 (only when multiple ad accounts): save the chosen account
+app.get('/auth/meta/select-account', async (req, res) => {
+  const { shop, account_id, account_name, token, expires_at } = req.query;
+  if (!shop || !account_id || !token) return res.status(400).json({ error: 'Missing parameters' });
+  try {
+    await pool.query(`
+      INSERT INTO meta_accounts (shop, access_token, ad_account_id, ad_account_name, token_expires_at, connected_at)
+      VALUES ($1,$2,$3,$4,$5,NOW())
+      ON CONFLICT (shop) DO UPDATE SET access_token=EXCLUDED.access_token, ad_account_id=EXCLUDED.ad_account_id, ad_account_name=EXCLUDED.ad_account_name, token_expires_at=EXCLUDED.token_expires_at, connected_at=NOW()
+    `, [shop, token, account_id, account_name || '', expires_at]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Meta status - is it connected, expiring soon?
+app.get('/meta-status', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  if (!shop) return res.json({ connected: false });
+  try {
+    const result = await pool.query('SELECT ad_account_id, ad_account_name, token_expires_at FROM meta_accounts WHERE shop=$1', [shop]);
+    if (result.rows.length === 0) return res.json({ connected: false });
+    const row = result.rows[0];
+    res.json({ connected: true, adAccountId: row.ad_account_id, adAccountName: row.ad_account_name, expiresAt: row.token_expires_at });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Disconnect Meta
+app.post('/meta-disconnect', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  if (!shop) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    await pool.query('DELETE FROM meta_accounts WHERE shop=$1', [shop]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Daily spend from Meta, server-side (no token exposed to frontend)
+app.get('/meta-spend', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  if (!shop) return res.status(401).json({ error: 'Not authenticated' });
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
+  try {
+    const result = await pool.query('SELECT access_token, ad_account_id, token_expires_at FROM meta_accounts WHERE shop=$1', [shop]);
+    if (result.rows.length === 0) return res.json({ total: 0, connected: false });
+    const { access_token, ad_account_id, token_expires_at } = result.rows[0];
+
+    if (token_expires_at && new Date(token_expires_at) < new Date()) {
+      return res.json({ total: 0, connected: true, expired: true, error: 'Meta-tokenet har gått ut. Återanslut.' });
+    }
+
+    const since = from.slice(0, 10);
+    const until = to.slice(0, 10);
+    const timeRange = encodeURIComponent(JSON.stringify({ since, until }));
+    const insights = await httpsGetJson('graph.facebook.com', `/v19.0/${ad_account_id}/insights?fields=spend&time_range=${timeRange}&time_increment=1&access_token=${access_token}`);
+
+    if (insights.error) {
+      return res.json({ total: 0, connected: true, error: insights.error.message });
+    }
+    const days = insights.data || [];
+    const total = days.reduce((sum, d) => sum + (parseFloat(d.spend) || 0), 0);
+    res.json({ total, connected: true, days });
+  } catch(e) { res.json({ total: 0, error: e.message }); }
 });
 
 // Sync all orders from Shopify to DB
@@ -318,13 +460,6 @@ app.use('/shopify', (req, res) => {
   proxyReq.end();
 });
 
-app.use('/meta', (req, res) => {
-  const options = { hostname: 'graph.facebook.com', path: req.url, method: req.method, headers: { 'Content-Type': 'application/json' } };
-  const proxyReq = https.request(options, proxyRes => { proxyRes.pipe(res); });
-  proxyReq.on('error', e => res.status(500).json({ error: e.message }));
-  proxyReq.end();
-});
-
 app.get('/health', (req, res) => res.json({ status: 'ok', connectedShops: Object.keys(tokenStore) }));
 
 function shopifyGet(hostname, token, path) {
@@ -347,6 +482,23 @@ function httpsPost(hostname, path, body) {
     const req = https.request(options, res => { let raw = ''; res.on('data', c => raw += c); res.on('end', () => resolve(raw)); });
     req.on('error', reject);
     req.write(data);
+    req.end();
+  });
+}
+
+// GET request to any hostname, returns parsed JSON. Used for Meta Graph API calls.
+function httpsGetJson(hostname, path) {
+  return new Promise((resolve, reject) => {
+    const options = { hostname, path, method: 'GET' };
+    const req = https.request(options, res => {
+      let raw = '';
+      res.on('data', c => raw += c);
+      res.on('end', () => {
+        try { resolve(JSON.parse(raw)); }
+        catch(e) { reject(new Error('Invalid JSON from ' + hostname + path + ': ' + raw.slice(0,200))); }
+      });
+    });
+    req.on('error', reject);
     req.end();
   });
 }
