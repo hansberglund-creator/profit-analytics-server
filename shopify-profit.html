@@ -4,80 +4,224 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Profit Analytics</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e8eaf0;min-height:100vh;font-size:14px}
-header{background:#181c27;border-bottom:1px solid #2a3045;padding:0 20px;height:52px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
-.logo{font-size:15px;font-weight:600;color:#fff;flex-shrink:0}.logo span{color:#3b82f6}
-nav{display:flex;gap:2px;flex:1;overflow-x:auto}
-nav button{background:none;border:none;color:#6b7494;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:12px;white-space:nowrap}
-nav button.active{background:#1e2335;color:#e8eaf0}
-nav button:hover:not(.active){color:#e8eaf0}
+:root{
+  --bg:#0d1b2e;--surface:#112240;--surface2:#142a4e;--surface3:#183056;
+  --border:#1e3358;--border2:#254070;
+  --text:#e8eef8;--muted:#2e4a6a;--muted2:#5a7a9a;
+  --accent:#4a90d9;--accent2:#5e7fe0;
+  --green:#3db882;--red:#c85a6a;--gold:#e8a83a;--cyan:#38bdf8;--purple:#8b82f0;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px;line-height:1.5}
+
+/* ─── HEADER ─────────────────────────────── */
+header{
+  background:rgba(9,18,35,.97);backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+  padding:0 28px;height:50px;
+  display:flex;align-items:center;gap:16px;
+  position:sticky;top:0;z-index:200;
+}
+.logo{font-size:15px;font-weight:700;color:#fff;flex-shrink:0;letter-spacing:-.2px}
+.logo span{font-weight:400;color:#5ba3d9}
+nav{display:flex;gap:1px;flex:1;overflow-x:auto}
+nav button{background:none;border:none;color:var(--muted2);padding:5px 11px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;white-space:nowrap;transition:all .15s;font-family:'Inter',sans-serif}
+nav button.active{background:rgba(74,144,217,.14);color:#7eb8f0}
+nav button:hover:not(.active){color:var(--text);background:rgba(255,255,255,.04)}
 .hdr-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
-main{padding:20px;max-width:1400px;margin:0 auto}
-.setup-card{background:#181c27;border:1px solid #2a3045;border-radius:12px;padding:32px;max-width:460px;margin:60px auto}
-.setup-card h2{font-size:20px;font-weight:600;margin-bottom:8px}
-.setup-card p{color:#6b7494;font-size:13px;margin-bottom:24px;line-height:1.6}
+main{padding:20px 24px;max-width:1200px;margin:0 auto}
+
+/* ─── SETUP ──────────────────────────────── */
+.setup-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:36px;max-width:460px;margin:80px auto}
+.setup-card h2{font-size:20px;font-weight:700;margin-bottom:8px;letter-spacing:-.4px}
+.setup-card p{color:var(--muted2);font-size:13px;margin-bottom:28px;line-height:1.7}
 .field{margin-bottom:14px}
-.field label{display:block;font-size:11px;color:#6b7494;margin-bottom:5px;font-weight:500;text-transform:uppercase;letter-spacing:.5px}
-.field input{width:100%;background:#0f1117;border:1px solid #2a3045;border-radius:7px;padding:9px 11px;color:#e8eaf0;font-size:13px;outline:none}
-.field input:focus{border-color:#3b82f6}
-.btn-primary{width:100%;background:#3b82f6;color:#fff;border:none;padding:10px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer}
-.btn-primary:disabled{opacity:.5;cursor:default}
-.error-msg{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:7px;padding:11px;color:#ef4444;font-size:12px;margin-bottom:14px}
-.period-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
-.period-tabs{display:flex;background:#181c27;border:1px solid #2a3045;border-radius:7px;padding:3px;gap:2px}
-.period-tabs button{background:none;border:none;color:#6b7494;padding:4px 10px;border-radius:5px;cursor:pointer;font-size:12px}
-.period-tabs button.active{background:#1e2335;color:#e8eaf0}
-.date-inputs{display:flex;gap:6px;align-items:center;font-size:12px;color:#6b7494}
-.date-inputs input{background:#181c27;border:1px solid #2a3045;border-radius:5px;padding:5px 8px;color:#e8eaf0;font-size:12px;outline:none}
-.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
-.metric{background:#181c27;border:1px solid #2a3045;border-radius:9px;padding:14px}
-.metric-label{font-size:10px;color:#6b7494;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
-.metric-value{font-size:22px;font-weight:600;letter-spacing:-.4px}
-.metric-sub{font-size:10px;margin-top:3px;color:#6b7494}
-.green{color:#22c55e}.red{color:#ef4444}.white{color:#e8eaf0}.blue{color:#3b82f6}
-.section{background:#181c27;border:1px solid #2a3045;border-radius:9px;margin-bottom:14px}
-.section-header{padding:13px 18px;border-bottom:1px solid #2a3045;display:flex;align-items:center;justify-content:space-between}
-.section-header h3{font-size:13px;font-weight:600}
-.section-body{padding:16px}
-.pl-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #1e2335;font-size:13px}
+.field label{display:block;font-size:10px;color:var(--muted2);margin-bottom:5px;font-weight:700;text-transform:uppercase;letter-spacing:.7px}
+.field input{width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:10px 13px;color:var(--text);font-size:13px;outline:none;transition:border .15s;font-family:'Inter',sans-serif}
+.field input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(64,128,255,.1)}
+.btn-primary{width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;padding:11px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
+.btn-primary:disabled{opacity:.35;cursor:default}
+.error-msg{background:rgba(255,61,90,.07);border:1px solid rgba(255,61,90,.22);border-radius:8px;padding:11px 14px;color:var(--red);font-size:12px;margin-bottom:14px}
+
+/* ─── DATE PICKER TRIGGER ────────────────── */
+.period-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px}
+.period-tabs{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:3px;gap:2px}
+.period-tabs button{background:none;border:none;color:var(--muted2);padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;transition:all .15s;font-family:'Inter',sans-serif}
+.period-tabs button.active{background:rgba(74,144,217,.16);color:#7eb8f0;box-shadow:none}
+.date-pill{display:inline-flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:5px 13px;cursor:pointer;font-size:12px;font-weight:500;color:var(--text);transition:border-color .15s;font-family:'Inter',sans-serif}
+.date-pill:hover{border-color:var(--border2)}
+.date-pill svg{opacity:.5}
+.bar-right{display:flex;gap:6px;align-items:center}
+#sync-status{font-size:11px;color:var(--muted2);display:flex;align-items:center;gap:5px}
+
+/* ─── DATE PICKER MODAL ──────────────────── */
+.cal-overlay{display:none;position:fixed;inset:0;z-index:500;background:rgba(4,8,18,.6);backdrop-filter:blur(4px)}
+.cal-overlay.open{display:flex;align-items:flex-start;justify-content:center;padding-top:80px}
+.cal-modal{background:var(--surface);border:1px solid var(--border2);border-radius:16px;display:flex;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.6);width:700px;max-width:95vw}
+.cal-sidebar{width:160px;flex-shrink:0;padding:16px 12px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:2px}
+.cal-sidebar button{background:none;border:none;color:var(--muted2);text-align:left;padding:8px 12px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:500;font-family:'Inter',sans-serif;transition:all .15s}
+.cal-sidebar button:hover{background:rgba(255,255,255,.05);color:var(--text)}
+.cal-sidebar button.active{background:rgba(74,144,217,.14);color:#7eb8f0}
+.cal-main{flex:1;padding:20px}
+.cal-range-display{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.cal-range-box{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text);font-weight:500}
+.cal-range-box span{display:block;font-size:10px;color:var(--muted2);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+.cal-range-arrow{color:var(--muted);font-size:14px}
+.cal-months{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.cal-month-title{font-size:12px;font-weight:600;color:var(--text);text-align:center;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.cal-nav-btn{background:none;border:none;color:var(--muted2);cursor:pointer;padding:2px 6px;border-radius:4px;font-size:14px;line-height:1;transition:color .15s}
+.cal-nav-btn:hover{color:var(--text)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-day-header{font-size:10px;color:var(--muted);text-align:center;padding:3px 0;font-weight:600}
+.cal-day{font-size:11px;text-align:center;padding:5px 2px;border-radius:5px;cursor:pointer;color:var(--muted2);transition:all .12s;line-height:1.2;min-height:24px;display:flex;align-items:center;justify-content:center}
+.cal-day:hover:not(.empty):not(.other){background:rgba(64,128,255,.15);color:var(--text)}
+.cal-day.other{color:var(--muted);opacity:.3;cursor:default}
+.cal-day.empty{cursor:default}
+.cal-day.today{color:var(--accent);font-weight:700}
+.cal-day.selected{background:var(--accent);color:#fff;font-weight:700;border-radius:5px}
+.cal-day.in-range{background:rgba(64,128,255,.12);color:var(--text)}
+.cal-day.range-start{background:var(--accent);color:#fff;border-radius:5px 0 0 5px}
+.cal-day.range-end{background:var(--accent);color:#fff;border-radius:0 5px 5px 0}
+.cal-day.range-start.range-end{border-radius:5px}
+.cal-footer{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
+
+/* ─── BUTTONS ────────────────────────────── */
+.btn-sm{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 11px;border-radius:7px;font-size:11px;font-weight:500;cursor:pointer;transition:all .15s;font-family:'Inter',sans-serif}
+.btn-sm:hover{background:var(--surface3);border-color:var(--border2)}
+.btn-danger{background:rgba(224,92,110,.07);border:1px solid rgba(224,92,110,.18);color:var(--red)}
+.btn-blue{background:rgba(74,144,217,.1);border:1px solid rgba(74,144,217,.22);color:#7eb8f0}
+.btn-green{background:rgba(45,212,160,.12);border:none;color:var(--green);padding:7px 18px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
+.btn-cancel{background:transparent;border:1px solid var(--border);color:var(--muted2);padding:7px 16px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;font-family:'Inter',sans-serif}
+.btn-cancel:hover{background:var(--surface2)}
+
+/* ─── KPI HERO ───────────────────────────── */
+.kpi-hero{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px 24px;margin-bottom:14px;position:relative;overflow:hidden}
+.kpi-hero::before{content:'';position:absolute;top:-80px;left:-40px;width:280px;height:280px;background:radial-gradient(circle,rgba(91,141,239,.04) 0%,transparent 65%);pointer-events:none}
+.kpi-hero::after{content:'';position:absolute;bottom:-60px;right:0;width:200px;height:200px;background:radial-gradient(circle,rgba(139,130,240,.03) 0%,transparent 65%);pointer-events:none}
+.kpi-hero-grid{display:grid;grid-template-columns:auto 1fr;gap:0;align-items:stretch}
+.kpi-left{padding-right:28px;border-right:1px solid var(--border);min-width:210px}
+.kpi-hero-eyebrow{font-size:10px;color:var(--muted2);font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.kpi-hero-eyebrow svg{opacity:.6}
+.kpi-hero-value{font-size:34px;font-weight:600;letter-spacing:-.6px;line-height:1;margin-bottom:6px}
+.kpi-hero-meta{font-size:12px;color:var(--muted2)}
+.kpi-right{display:grid;grid-template-columns:repeat(3,1fr);gap:0}
+.kpi-sub-item{padding:0 24px;display:flex;flex-direction:column;justify-content:center;border-right:1px solid var(--border)}
+.kpi-sub-item:last-child{border-right:none}
+.kpi-sub-eyebrow{font-size:10px;color:var(--muted2);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:5px}
+.kpi-sub-value{font-size:20px;font-weight:600;letter-spacing:-.3px;line-height:1;margin-bottom:4px}
+.kpi-sub-meta{font-size:11px;color:var(--muted2)}
+
+/* ─── METRICS GRID ───────────────────────── */
+.metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.metric{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 18px;position:relative;overflow:hidden;transition:border-color .2s;cursor:default}
+.metric:hover{border-color:var(--border2)}
+.metric-glow{position:absolute;top:-30px;right:-30px;width:100px;height:100px;border-radius:50%;opacity:.04;pointer-events:none}
+.metric-icon{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;font-size:15px}
+.metric-label{font-size:10px;color:var(--muted2);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.metric-value{font-size:22px;font-weight:600;letter-spacing:-.4px;line-height:1}
+.metric-sub{font-size:11px;margin-top:5px;color:var(--muted2)}
+
+/* ─── BOTTOM GRID ─────────────────────────── */
+.bottom-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:12px;margin-bottom:12px}
+
+/* ─── SECTION ────────────────────────────── */
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:12px}
+.section-header{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.section-header h3{font-size:12px;font-weight:600;letter-spacing:-.1px;display:flex;align-items:center;gap:7px}
+.section-body{padding:16px 18px}
+
+/* ─── BAR CHART ──────────────────────────── */
+.chart-bar-wrap{display:flex;align-items:flex-end;gap:3px;height:120px}
+.chart-bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0}
+.chart-bar{width:100%;border-radius:4px 4px 0 0;min-height:2px;transition:opacity .15s,filter .15s;cursor:pointer}
+.chart-bar:hover{filter:brightness(1.25)}
+.chart-label{font-size:9px;color:var(--muted);white-space:nowrap}
+
+/* ─── PREMIUM DONUT ──────────────────────── */
+.donut-container{display:flex;align-items:center;gap:20px}
+.donut-svg-wrap{position:relative;flex-shrink:0}
+.donut-center-label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+.donut-center-title{font-size:9px;color:var(--muted2);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+.donut-center-value{font-size:12px;font-weight:600;color:var(--text);letter-spacing:-.2px;text-align:center;line-height:1.2}
+.donut-legend{display:flex;flex-direction:column;gap:6px;flex:1}
+.legend-row{display:flex;align-items:center;gap:8px;font-size:11px;padding:5px 8px;border-radius:7px;transition:background .12s;cursor:default}
+.legend-row:hover{background:rgba(255,255,255,.03)}
+.legend-swatch{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.legend-name{color:var(--muted2);flex:1;font-weight:500}
+.legend-amt{color:var(--text);font-weight:500;text-align:right;font-size:11px}
+.legend-pct{color:var(--muted);font-size:10px;min-width:36px;text-align:right}
+
+/* ─── P&L ROWS ───────────────────────────── */
+.pl-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(24,32,48,.8);font-size:13px}
 .pl-row:last-child{border-bottom:none}
-.pl-row.total{font-weight:600;font-size:14px;border-top:1px solid #2a3045;border-bottom:none;padding-top:10px;margin-top:3px}
-.pl-row.indent{padding-left:14px}
-.pl-label{color:#9ca3b8}.pl-row.total .pl-label{color:#e8eaf0}
-.chart-bar-wrap{display:flex;align-items:flex-end;gap:3px;height:100px}
-.chart-bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
-.chart-bar{width:100%;border-radius:3px 3px 0 0;min-height:2px}
-.chart-label{font-size:9px;color:#6b7494;white-space:nowrap}
-.loading{text-align:center;padding:40px;color:#6b7494}
-.btn-sm{background:#1e2335;border:1px solid #2a3045;color:#e8eaf0;padding:4px 9px;border-radius:5px;font-size:11px;cursor:pointer}
-.btn-sm:hover{background:#2a3045}
-.btn-danger{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#ef4444}
-.btn-blue{background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.25);color:#3b82f6}
+.pl-row.total{font-weight:600;font-size:13px;border-top:1px solid var(--border);border-bottom:none;padding-top:12px;margin-top:4px}
+.pl-row.indent{padding-left:16px}
+.pl-label{color:var(--muted2)}
+.pl-row.total .pl-label{color:var(--text)}
+
+/* ─── TABLES ─────────────────────────────── */
 table{width:100%;border-collapse:collapse}
-th{text-align:left;font-size:10px;color:#6b7494;text-transform:uppercase;letter-spacing:.4px;padding:7px 11px;border-bottom:1px solid #2a3045}
-td{padding:9px 11px;font-size:12px;border-bottom:1px solid #1e2335}
+th{text-align:left;font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;padding:8px 14px;border-bottom:1px solid var(--border)}
+td{padding:10px 14px;font-size:12px;border-bottom:1px solid rgba(24,32,48,.6)}
 tr:last-child td{border-bottom:none}
-tr:hover td{background:#1e2335}
-.badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:500}
-.badge.green{background:rgba(34,197,94,.1);color:#22c55e}
-.badge.red{background:rgba(239,68,68,.1);color:#ef4444}
+tr:hover td{background:rgba(255,255,255,.018)}
+.badge{display:inline-block;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:600}
+.badge.green{background:rgba(45,212,160,.1);color:var(--green)}
+.badge.red{background:rgba(224,92,110,.09);color:var(--red)}
+
+/* ─── COLORS ─────────────────────────────── */
+.green{color:var(--green)}.red{color:var(--red)}.white{color:var(--text)}.blue{color:var(--accent)}.cost{color:var(--muted2)}
 .tab-content{display:none}.tab-content.active{display:block}
-.ci{background:#0f1117;border:1px solid #2a3045;border-radius:5px;padding:5px 8px;color:#e8eaf0;font-size:12px;outline:none}
-.ri{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #1e2335;font-size:11px}
+.ci{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 9px;color:var(--text);font-size:12px;outline:none;font-family:'Inter',sans-serif}
+.ri{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(24,32,48,.6);font-size:12px}
 .ri:last-child{border-bottom:none}
-.ri label{color:#9ca3b8}
+.ri label{color:var(--muted2)}
 .custom-item{display:flex;gap:8px;margin-bottom:8px;align-items:center}
-.custom-item input{flex:1;background:#0f1117;border:1px solid #2a3045;border-radius:5px;padding:6px 9px;color:#e8eaf0;font-size:12px;outline:none}
-.custom-item select{background:#0f1117;border:1px solid #2a3045;border-radius:5px;padding:6px 7px;color:#e8eaf0;font-size:12px;outline:none}
-.custom-item .rm{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#ef4444;padding:5px 9px;border-radius:5px;cursor:pointer;font-size:11px}
-.dot{width:7px;height:7px;border-radius:50%;background:#6b7494;flex-shrink:0}
-.dot.green{background:#22c55e}
-@media(max-width:700px){.metrics-grid{grid-template-columns:1fr 1fr}}
+.custom-item input,.custom-item select{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 9px;color:var(--text);font-size:12px;outline:none;font-family:'Inter',sans-serif}
+.custom-item input{flex:1}
+.custom-item .rm{background:rgba(255,61,90,.09);border:1px solid rgba(255,61,90,.18);color:var(--red);padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0}
+.dot.green{background:var(--green)}
+.loading{text-align:center;padding:60px;color:var(--muted2)}
+.pulse-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(45,212,160,.45)}70%{box-shadow:0 0 0 6px rgba(45,212,160,0)}100%{box-shadow:0 0 0 0 rgba(45,212,160,0)}}
+
+@media(max-width:1100px){.kpi-hero-grid{grid-template-columns:1fr}.kpi-left{border-right:none;padding-right:0;border-bottom:1px solid var(--border);padding-bottom:20px;margin-bottom:20px}.kpi-right{grid-template-columns:repeat(3,1fr)}.metrics-grid{grid-template-columns:repeat(2,1fr)}.bottom-grid{grid-template-columns:1fr}}
+@media(max-width:700px){.kpi-right{grid-template-columns:1fr 1fr}.kpi-sub-item{border-right:none;padding:10px 0;border-bottom:1px solid var(--border)}}
 </style>
 </head>
 <body>
+
+<!-- DATE PICKER OVERLAY -->
+<div class="cal-overlay" id="cal-overlay" onclick="if(event.target===this)closeCal()">
+  <div class="cal-modal">
+    <div class="cal-sidebar">
+      <button onclick="calPreset('today')">Idag</button>
+      <button onclick="calPreset('yesterday')">Igår</button>
+      <button onclick="calPreset('7d')">Senaste 7 dagar</button>
+      <button onclick="calPreset('30d')">Senaste 30 dagar</button>
+      <button onclick="calPreset('month')">Denna månad</button>
+      <button onclick="calPreset('last_month')">Förra månaden</button>
+      <button onclick="calPreset('90d')">Senaste 90 dagar</button>
+      <button onclick="calPreset('year')">Detta år</button>
+    </div>
+    <div class="cal-main">
+      <div class="cal-range-display">
+        <div class="cal-range-box"><span>Från</span><span id="cal-from-label">—</span></div>
+        <div class="cal-range-arrow">→</div>
+        <div class="cal-range-box"><span>Till</span><span id="cal-to-label">—</span></div>
+      </div>
+      <div class="cal-months" id="cal-months"></div>
+      <div class="cal-footer">
+        <button class="btn-cancel" onclick="closeCal()">Avbryt</button>
+        <button class="btn-green" onclick="applyCalendar()">Applicera</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <header>
   <div class="logo">Profit<span>Analytics</span></div>
   <nav>
@@ -99,7 +243,7 @@ tr:hover td{background:#1e2335}
   <div id="setup-view">
     <div class="setup-card">
       <h2>Anslut din Shopify-butik</h2>
-      <p>Ange din butiks URL nedan.</p>
+      <p>Ange din butiks URL nedan för att komma igång.</p>
       <div id="setup-error" style="display:none" class="error-msg"></div>
       <div class="field">
         <label>Shopify Store URL</label>
@@ -111,54 +255,152 @@ tr:hover td{background:#1e2335}
 
   <div id="app-view" style="display:none">
     <div class="period-bar">
-      <div class="period-tabs">
-        <button onclick="setPeriod('today',this)">Idag</button>
-        <button onclick="setPeriod('yesterday',this)">Igår</button>
-        <button class="active" onclick="setPeriod('7d',this)">7 dagar</button>
-        <button onclick="setPeriod('30d',this)">30 dagar</button>
-        <button onclick="setPeriod('month',this)">Denna månad</button>
-        <button onclick="setPeriod('custom',this)">Anpassad</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="period-tabs">
+          <button onclick="setPeriod('today',this)">Idag</button>
+          <button onclick="setPeriod('yesterday',this)">Igår</button>
+          <button class="active" onclick="setPeriod('7d',this)">7 dagar</button>
+          <button onclick="setPeriod('30d',this)">30 dagar</button>
+          <button onclick="setPeriod('month',this)">Denna månad</button>
+        </div>
+        <button class="date-pill" onclick="openCal()" id="date-pill-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span id="date-pill-label">Anpassad</span>
+        </button>
       </div>
-      <div class="date-inputs" id="custom-dates" style="display:none">
-        <input type="date" id="date-from"> till <input type="date" id="date-to">
-        <button class="btn-sm" onclick="loadData()">Hämta</button>
-      </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <span id="sync-status" style="font-size:11px;color:#6b7494"></span>
-        <button class="btn-sm" onclick="loadData()">↻ Synka</button>
-        <button class="btn-sm btn-blue" onclick="resyncAll()" title="Synka om alla ordrar från Shopify">⟳ Full sync</button>
-        <button class="btn-sm btn-danger" onclick="disconnect()">Koppla bort</button>
+      <div class="bar-right">
+        <span id="sync-status"></span>
+        <button class="btn-sm" onclick="loadData()">↻ Uppdatera</button>
+        <button class="btn-sm btn-blue" onclick="resyncAll()">⟳ Full sync</button>
+        <button class="btn-sm btn-danger" onclick="disconnect()">✕ Koppla bort</button>
       </div>
     </div>
 
     <div id="tab-dashboard" class="tab-content active">
       <div id="error-banner" style="display:none" class="error-msg"></div>
-      <div id="loading-state" class="loading">Hämtar data...</div>
+      <div id="loading-state" class="loading">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="animation:spin 1s linear infinite;color:var(--accent)"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        <div style="margin-top:12px;color:var(--muted2)">Hämtar data...</div>
+      </div>
+      <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
       <div id="dashboard-data" style="display:none">
+
+        <!-- HERO -->
+        <div class="kpi-hero">
+          <div class="kpi-hero-grid">
+            <div class="kpi-left">
+              <div class="kpi-hero-eyebrow">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+                Nettoresultat
+              </div>
+              <div class="kpi-hero-value" id="hero-net">—</div>
+              <div class="kpi-hero-meta" id="hero-net-sub"></div>
+            </div>
+            <div class="kpi-right">
+              <div class="kpi-sub-item">
+                <div class="kpi-sub-eyebrow">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                  Omsättning
+                </div>
+                <div class="kpi-sub-value white" id="kpi-revenue">—</div>
+                <div class="kpi-sub-meta" id="kpi-orders">—</div>
+              </div>
+              <div class="kpi-sub-item">
+                <div class="kpi-sub-eyebrow">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/></svg>
+                  Bruttovinst
+                </div>
+                <div class="kpi-sub-value white" id="kpi-gross">—</div>
+                <div class="kpi-sub-meta" id="kpi-gross-margin">—</div>
+              </div>
+              <div class="kpi-sub-item">
+                <div class="kpi-sub-eyebrow">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/></svg>
+                  Totala kostnader
+                </div>
+                <div class="kpi-sub-value white" id="kpi-costs">—</div>
+                <div class="kpi-sub-meta" id="kpi-cost-pct">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- METRICS GRID -->
         <div class="metrics-grid">
-          <div class="metric"><div class="metric-label">Total omsättning</div><div class="metric-value white" id="m-revenue">-</div><div class="metric-sub" id="m-orders">-</div></div>
-          <div class="metric"><div class="metric-label">Bruttovinst</div><div class="metric-value green" id="m-gross">-</div><div class="metric-sub" id="m-gross-margin">-</div></div>
-          <div class="metric"><div class="metric-label">Nettoresultat</div><div class="metric-value" id="m-net">-</div><div class="metric-sub" id="m-net-margin">-</div></div>
-          <div class="metric"><div class="metric-label">Totala kostnader</div><div class="metric-value red" id="m-costs">-</div><div class="metric-sub" id="m-cost-pct">-</div></div>
-          <div class="metric"><div class="metric-label">AOV</div><div class="metric-value white" id="m-aov">-</div></div>
-          <div class="metric"><div class="metric-label">ROAS</div><div class="metric-value blue" id="m-roas">-</div></div>
+          <div class="metric">
+            <div class="metric-glow" style="background:var(--accent)"></div>
+            <div class="metric-label">Snittordervärde</div>
+            <div class="metric-value white" id="m-aov">—</div>
+          </div>
+          <div class="metric">
+            <div class="metric-glow" style="background:var(--gold)"></div>
+            <div class="metric-label">ROAS</div>
+            <div class="metric-value" style="color:var(--gold)" id="m-roas">—</div>
+          </div>
+          <div class="metric">
+            <div class="metric-glow" style="background:var(--green)"></div>
+            <div class="metric-label">Nettomarginal</div>
+            <div class="metric-value" id="m-net-margin">—</div>
+          </div>
+          <div class="metric">
+            <div class="metric-glow" style="background:var(--cyan)"></div>
+            <div class="metric-label">Bruttomarginal</div>
+            <div class="metric-value white" id="m-gross-margin">—</div>
+          </div>
         </div>
-        <div class="section">
-          <div class="section-header"><h3>Omsättning per dag</h3></div>
-          <div class="section-body"><div class="chart-bar-wrap" id="daily-chart"></div></div>
+
+        <!-- CHART + DONUT -->
+        <div class="bottom-grid">
+          <div class="section">
+            <div class="section-header">
+              <h3>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                Omsättning per dag
+              </h3>
+            </div>
+            <div class="section-body"><div class="chart-bar-wrap" id="daily-chart"></div></div>
+          </div>
+          <div class="section">
+            <div class="section-header">
+              <h3>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20"/></svg>
+                Kostnadsnedbrytning
+              </h3>
+            </div>
+            <div class="section-body">
+              <div class="donut-container">
+                <div class="donut-svg-wrap">
+                  <svg id="donut-svg" width="160" height="160" viewBox="0 0 160 160" style="filter:drop-shadow(0 0 8px rgba(91,141,239,.1))"></svg>
+                  <div class="donut-center-label">
+                    <div class="donut-center-title">Totalt</div>
+                    <div class="donut-center-value" id="donut-total">—</div>
+                  </div>
+                </div>
+                <div class="donut-legend" id="donut-legend"></div>
+              </div>
+            </div>
+          </div>
         </div>
+
+        <!-- BREAKDOWN -->
         <div class="section">
-          <div class="section-header"><h3>Kostnadsnedbrytning</h3></div>
+          <div class="section-header">
+            <h3>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              Resultatöversikt
+            </h3>
+          </div>
           <div class="section-body">
-            <div class="pl-row"><span class="pl-label">Total omsättning</span><span id="bd-gross-rev">-</span></div>
-            <div class="pl-row indent"><span class="pl-label">– Returer</span><span class="red" id="bd-refunds">-</span></div>
-            <div class="pl-row indent"><span class="pl-label">– Moms</span><span class="red" id="bd-vat">-</span></div>
-            <div class="pl-row indent"><span class="pl-label">– Shopify-avgifter</span><span class="red" id="bd-shopify">-</span></div>
-            <div class="pl-row indent"><span class="pl-label">– COGS</span><span class="red" id="bd-cogs">-</span></div>
-            <div class="pl-row indent"><span class="pl-label">– Frakt / 3PL</span><span class="red" id="bd-shipping">-</span></div>
-            <div class="pl-row indent"><span class="pl-label">– Annonsutgifter</span><span class="red" id="bd-ads">-</span></div>
-            <div class="pl-row indent"><span class="pl-label">– Custom kostnader</span><span class="red" id="bd-custom">-</span></div>
-            <div class="pl-row total"><span class="pl-label">Nettoresultat</span><span id="bd-net">-</span></div>
+            <div class="pl-row"><span style="font-weight:600">Total omsättning</span><span id="bd-gross-rev">—</span></div>
+            <div class="pl-row indent"><span class="pl-label">↳ Returer</span><span id="bd-refunds">—</span></div>
+            <div class="pl-row indent"><span class="pl-label">↳ Moms</span><span id="bd-vat">—</span></div>
+            <div class="pl-row indent"><span class="pl-label">↳ Shopify-avgifter</span><span id="bd-shopify">—</span></div>
+            <div class="pl-row indent"><span class="pl-label">↳ COGS</span><span id="bd-cogs">—</span></div>
+            <div class="pl-row indent"><span class="pl-label">↳ Frakt / 3PL</span><span id="bd-shipping">—</span></div>
+            <div class="pl-row indent"><span class="pl-label">↳ Annonsutgifter</span><span id="bd-ads">—</span></div>
+            <div class="pl-row indent"><span class="pl-label">↳ Custom kostnader</span><span id="bd-custom">—</span></div>
+            <div class="pl-row indent"><span class="pl-label">↳ Transaktionsavgifter <span id="txfees-badge" style="font-size:10px;color:var(--muted2)"></span></span><span id="bd-txfees">—</span></div>
+            <div class="pl-row total"><span class="pl-label">Nettoresultat</span><span id="bd-net">—</span></div>
           </div>
         </div>
       </div>
@@ -178,32 +420,33 @@ tr:hover td{background:#1e2335}
       <div class="section">
         <div class="section-header"><h3>Resultaträkning (P&amp;L)</h3></div>
         <div class="section-body">
-          <div class="pl-row"><span>Total omsättning</span><span id="pl-gross-rev">-</span></div>
-          <div class="pl-row indent"><span class="pl-label">– Returer</span><span class="red" id="pl-refunds">-</span></div>
-          <div class="pl-row indent"><span class="pl-label">– Moms</span><span class="red" id="pl-vat">-</span></div>
-          <div class="pl-row total"><span class="pl-label">Nettointäkt</span><span id="pl-net-rev">-</span></div>
-          <div style="height:10px"></div>
-          <div class="pl-row"><span>COGS</span><span class="red" id="pl-cogs">-</span></div>
-          <div class="pl-row total"><span class="pl-label">Bruttovinst</span><span id="pl-gross-profit">-</span></div>
-          <div style="height:10px"></div>
-          <div class="pl-row"><span>Frakt / 3PL</span><span class="red" id="pl-shipping">-</span></div>
-          <div class="pl-row"><span>Annonsutgifter</span><span class="red" id="pl-ads">-</span></div>
-          <div class="pl-row"><span>Shopify-avgifter</span><span class="red" id="pl-shopify">-</span></div>
-          <div class="pl-row"><span>Custom kostnader</span><span class="red" id="pl-custom">-</span></div>
-          <div class="pl-row total"><span class="pl-label">Rörelsekostnader</span><span class="red" id="pl-opex">-</span></div>
-          <div style="height:10px"></div>
-          <div class="pl-row total" style="font-size:16px"><span class="pl-label">Nettoresultat</span><span id="pl-net">-</span></div>
-          <div class="pl-row"><span class="pl-label">Nettomarginal</span><span id="pl-net-margin">-</span></div>
+          <div class="pl-row"><span>Total omsättning</span><span id="pl-gross-rev">—</span></div>
+          <div class="pl-row indent"><span class="pl-label">↳ Returer</span><span id="pl-refunds">—</span></div>
+          <div class="pl-row indent"><span class="pl-label">↳ Moms</span><span id="pl-vat">—</span></div>
+          <div class="pl-row total"><span class="pl-label">Nettointäkt</span><span id="pl-net-rev">—</span></div>
+          <div style="height:12px"></div>
+          <div class="pl-row"><span>COGS</span><span id="pl-cogs">—</span></div>
+          <div class="pl-row total"><span class="pl-label">Bruttovinst</span><span id="pl-gross-profit">—</span></div>
+          <div style="height:12px"></div>
+          <div class="pl-row"><span>Frakt / 3PL</span><span id="pl-shipping">—</span></div>
+          <div class="pl-row"><span>Annonsutgifter</span><span id="pl-ads">—</span></div>
+          <div class="pl-row"><span>Shopify-avgifter</span><span id="pl-shopify">—</span></div>
+          <div class="pl-row"><span>Custom kostnader</span><span id="pl-custom">—</span></div>
+          <div class="pl-row"><span>Transaktionsavgifter</span><span id="pl-txfees">—</span></div>
+          <div class="pl-row total"><span class="pl-label">Rörelsekostnader</span><span id="pl-opex">—</span></div>
+          <div style="height:12px"></div>
+          <div class="pl-row total" style="font-size:16px"><span class="pl-label">Nettoresultat</span><span id="pl-net">—</span></div>
+          <div class="pl-row"><span class="pl-label">Nettomarginal</span><span id="pl-net-margin2">—</span></div>
         </div>
       </div>
     </div>
 
     <div id="tab-ltv" class="tab-content">
       <div class="metrics-grid">
-        <div class="metric"><div class="metric-label">Unika kunder</div><div class="metric-value white" id="ltv-customers">-</div></div>
-        <div class="metric"><div class="metric-label">Återköpskunder</div><div class="metric-value blue" id="ltv-repeat">-</div><div class="metric-sub" id="ltv-repeat-pct">-</div></div>
-        <div class="metric"><div class="metric-label">Snitt köp / kund</div><div class="metric-value white" id="ltv-avg-orders">-</div></div>
-        <div class="metric"><div class="metric-label">LTV / kund</div><div class="metric-value green" id="ltv-value">-</div></div>
+        <div class="metric"><div class="metric-label">Unika kunder</div><div class="metric-value white" id="ltv-customers">—</div></div>
+        <div class="metric"><div class="metric-label">Återköpskunder</div><div class="metric-value blue" id="ltv-repeat">—</div><div class="metric-sub" id="ltv-repeat-pct">—</div></div>
+        <div class="metric"><div class="metric-label">Snitt köp / kund</div><div class="metric-value white" id="ltv-avg-orders">—</div></div>
+        <div class="metric"><div class="metric-label">LTV / kund</div><div class="metric-value green" id="ltv-value">—</div></div>
       </div>
       <div class="section">
         <div class="section-header"><h3>Toppkunder</h3></div>
@@ -217,26 +460,19 @@ tr:hover td{background:#1e2335}
     <div id="tab-costs" class="tab-content">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
         <div>
-          <div class="section" style="margin-bottom:10px">
+          <div class="section" style="margin-bottom:12px">
             <div class="section-header">
               <h3>Meta Ads</h3>
               <div style="display:flex;align-items:center;gap:6px">
                 <div class="dot" id="meta-dot"></div>
-                <span id="meta-status-text" style="font-size:11px;color:#6b7494">Ej kopplad</span>
-                <button class="btn-sm btn-blue" onclick="showMetaSetup()">Koppla API</button>
+                <span id="meta-status-text" style="font-size:11px;color:var(--muted2)">Ej kopplad</span>
+                <button class="btn-sm btn-blue" id="meta-connect-btn" onclick="connectMeta()">Anslut Meta</button>
+                <button class="btn-sm" id="meta-disconnect-btn" onclick="disconnectMeta()" style="display:none">Koppla bort</button>
               </div>
             </div>
             <div class="section-body">
-              <div id="meta-api-form" style="display:none;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #2a3045">
-                <input type="password" id="meta-token-input" placeholder="Meta API token" class="ci" style="width:100%;margin-bottom:6px">
-                <input type="text" id="meta-account-input" placeholder="act_123456789" class="ci" style="width:100%;margin-bottom:8px">
-                <div style="display:flex;gap:6px">
-                  <button class="btn-sm btn-blue" onclick="connectMeta()">Anslut</button>
-                  <button class="btn-sm" onclick="document.getElementById('meta-api-form').style.display='none'">Avbryt</button>
-                </div>
-              </div>
-              <div class="ri"><label>Meta Ads (kr)</label><input type="number" id="cost-meta" class="ci" style="width:110px" placeholder="0" oninput="saveCosts();recalc()"></div>
-              <div style="font-size:11px;color:#6b7494;margin-top:6px" id="meta-sync-note">Manuell inmatning</div>
+              <div class="ri"><label>Meta Ads (kr)</label><input type="number" id="cost-meta" class="ci" style="width:110px" placeholder="0" disabled oninput="saveCosts();recalc()"></div>
+              <div style="font-size:11px;color:var(--muted2);margin-top:7px" id="meta-sync-note">Ej ansluten</div>
             </div>
           </div>
           <div class="section">
@@ -249,7 +485,7 @@ tr:hover td{background:#1e2335}
           </div>
         </div>
         <div>
-          <div class="section" style="margin-bottom:10px">
+          <div class="section" style="margin-bottom:12px">
             <div class="section-header"><h3>Frakt &amp; 3PL</h3></div>
             <div class="section-body">
               <div class="ri"><label>Frakt / order (kr)</label><input type="number" id="cost-shipping-per-order" class="ci" style="width:110px" placeholder="0" oninput="saveCosts();recalc()"></div>
@@ -266,7 +502,7 @@ tr:hover td{background:#1e2335}
 
     <div id="tab-moms" class="tab-content">
       <div class="section">
-        <div class="section-header"><h3>Momssats per produkt</h3><span style="font-size:11px;color:#6b7494">Tom = standard</span></div>
+        <div class="section-header"><h3>Momssats per produkt</h3><span style="font-size:11px;color:var(--muted2)">Tom = standard</span></div>
         <div style="padding:0"><table>
           <thead><tr><th>Produkt</th><th>Momssats %</th><th>Status</th></tr></thead>
           <tbody id="vat-table"></tbody>
@@ -290,12 +526,13 @@ tr:hover td{background:#1e2335}
         <div class="section-body">
           <div class="field"><label>Standard momssats %</label><input type="number" id="settings-vat" placeholder="25" oninput="saveSettings();recalc()"></div>
           <div class="field"><label>Shopify-avgift %</label><input type="number" id="settings-shopify-fee" placeholder="0" step="0.1" oninput="saveSettings();recalc()"></div>
+          <div class="field"><label>Transaktionsavgift %</label><input type="number" id="settings-tx-fee" placeholder="3.16" step="0.01" oninput="saveSettings();recalc()"><div style="font-size:11px;color:var(--muted2);margin-top:4px">Kortavgift från Shopify Payments / Klarna</div></div>
           <div class="field"><label>Valuta</label>
             <select id="settings-currency" class="ci" style="width:100%" onchange="saveSettings();recalc()">
               <option value="SEK">SEK</option><option value="EUR">EUR</option><option value="DKK">DKK</option><option value="NOK">NOK</option>
             </select>
           </div>
-          <div class="field"><label>Butik</label><input type="text" id="settings-shop" class="ci" style="width:100%;opacity:.5" readonly></div>
+          <div class="field"><label>Butik</label><input type="text" id="settings-shop" class="ci" style="width:100%;opacity:.4" readonly></div>
           <button class="btn-sm btn-danger" onclick="disconnect()">Koppla bort</button>
         </div>
       </div>
@@ -306,38 +543,168 @@ tr:hover td{background:#1e2335}
 <script>
 const PROXY='https://profit-analytics-server-production.up.railway.app';
 const TABS=['dashboard','products','pl','ltv','costs','moms','cogs','settings'];
-let shopUrl='',vatRate=25,shopifyFee=0,currency='SEK';
+let shopUrl='',vatRate=25,shopifyFee=0,txFeeRate=0,currency='SEK';
 let orders=[],products=[],customCosts=[],cogsMap={},vatMap={};
 let periodRefunds=0;
+let transactionFees=0,transactionFeesExact=false;
 let metaToken='',metaAccountId='',metaConnected=false,metaSpend=0;
 let currentPeriod='7d';
 
-const fmt=n=>typeof n!=='number'||isNaN(n)?'-':new Intl.NumberFormat('sv-SE',{style:'currency',currency,minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
-const fmtPct=n=>isNaN(n)?'-':n.toFixed(1)+'%';
-const fmtNum=n=>isNaN(n)?'-':new Intl.NumberFormat('sv-SE').format(Math.round(n));
+// Calendar state
+let calFrom=null,calTo=null,calPhase=0,calViewYear,calViewMonth;
+let pendingFrom=null,pendingTo=null;
 
-// Convert date to Stockholm date number YYYYMMDD
-function toSthlmDateNum(d) {
-  const s=new Date(d.toLocaleString('en-US',{timeZone:'Europe/Stockholm'}));
-  return s.getFullYear()*10000+(s.getMonth()+1)*100+s.getDate();
+const fmt=n=>typeof n!=='number'||isNaN(n)?'—':new Intl.NumberFormat('sv-SE',{style:'currency',currency,minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+const fmtPct=n=>isNaN(n)?'—':n.toFixed(1)+'%';
+const fmtNum=n=>isNaN(n)?'—':new Intl.NumberFormat('sv-SE').format(Math.round(n));
+const MONTHS=['Januari','Februari','Mars','April','Maj','Juni','Juli','Augusti','September','Oktober','November','December'];
+const DAYS_SV=['Må','Ti','On','To','Fr','Lö','Sö'];
+
+function fmtDate(d){if(!d)return'—';const s=new Date(d.toLocaleString('en-US',{timeZone:'Europe/Stockholm'}));return`${s.getDate()} ${MONTHS[s.getMonth()].slice(0,3)} ${s.getFullYear()}`;}
+
+/* ─── CALENDAR ─── */
+function openCal(){
+  const now=new Date();
+  const sn=new Date(now.toLocaleString('en-US',{timeZone:'Europe/Stockholm'}));
+  calViewYear=sn.getFullYear();calViewMonth=sn.getMonth();
+  const{from,to}=getPeriodDates();
+  pendingFrom=new Date(from);pendingTo=new Date(to);pendingTo.setDate(pendingTo.getDate()-1);
+  calPhase=0;
+  renderCal();
+  document.getElementById('cal-overlay').classList.add('open');
+}
+function closeCal(){document.getElementById('cal-overlay').classList.remove('open');}
+
+function calPreset(p){
+  const now=new Date();
+  const sn=new Date(now.toLocaleString('en-US',{timeZone:'Europe/Stockholm'}));
+  const y=sn.getFullYear(),m=sn.getMonth(),d=sn.getDate();
+  let f,t;
+  if(p==='today'){f=new Date(y,m,d);t=new Date(y,m,d);}
+  else if(p==='yesterday'){f=new Date(y,m,d-1);t=new Date(y,m,d-1);}
+  else if(p==='7d'){f=new Date(y,m,d-6);t=new Date(y,m,d);}
+  else if(p==='30d'){f=new Date(y,m,d-29);t=new Date(y,m,d);}
+  else if(p==='month'){f=new Date(y,m,1);t=new Date(y,m,d);}
+  else if(p==='last_month'){f=new Date(y,m-1,1);t=new Date(y,m,0);}
+  else if(p==='90d'){f=new Date(y,m,d-89);t=new Date(y,m,d);}
+  else if(p==='year'){f=new Date(y,0,1);t=new Date(y,m,d);}
+  pendingFrom=f;pendingTo=t;calPhase=0;
+  calViewYear=f.getFullYear();calViewMonth=f.getMonth();
+  renderCal();
+  // highlight sidebar
+  document.querySelectorAll('.cal-sidebar button').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
 }
 
-function getPeriodDates() {
+function renderCal(){
+  updateCalLabels();
+  const m1y=calViewYear,m1m=calViewMonth;
+  let m2m=m1m+1,m2y=m1y;if(m2m>11){m2m=0;m2y++;}
+  const wrap=document.getElementById('cal-months');
+  wrap.innerHTML=`
+    <div>
+      <div class="cal-month-title">
+        <button class="cal-nav-btn" onclick="calNav(-1)">‹</button>
+        ${MONTHS[m1m]} ${m1y}
+        <div style="width:24px"></div>
+      </div>
+      <div class="cal-grid">${renderMonth(m1y,m1m)}</div>
+    </div>
+    <div>
+      <div class="cal-month-title">
+        <div style="width:24px"></div>
+        ${MONTHS[m2m]} ${m2y}
+        <button class="cal-nav-btn" onclick="calNav(1)">›</button>
+      </div>
+      <div class="cal-grid">${renderMonth(m2y,m2m)}</div>
+    </div>`;
+}
+
+function renderMonth(y,m){
   const now=new Date();
-  const sthlmNow=new Date(now.toLocaleString('en-US',{timeZone:'Europe/Stockholm'}));
-  const y=sthlmNow.getFullYear(),m=sthlmNow.getMonth(),d=sthlmNow.getDate();
+  const sn=new Date(now.toLocaleString('en-US',{timeZone:'Europe/Stockholm'}));
+  const todayKey=`${sn.getFullYear()}-${sn.getMonth()}-${sn.getDate()}`;
+  let html=DAYS_SV.map(d=>`<div class="cal-day-header">${d}</div>`).join('');
+  const first=new Date(y,m,1);
+  // Monday-first: getDay() 0=Sun→6, 1=Mon→0
+  let startDow=(first.getDay()+6)%7;
+  for(let i=0;i<startDow;i++)html+=`<div class="cal-day empty"></div>`;
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  for(let d=1;d<=daysInMonth;d++){
+    const date=new Date(y,m,d);
+    const key=`${y}-${m}-${d}`;
+    const isToday=key===todayKey;
+    const ds=dayStatus(date);
+    let cls='cal-day';
+    if(ds==='start')cls+=' range-start';
+    else if(ds==='end')cls+=' range-end';
+    else if(ds==='in')cls+=' in-range';
+    if(isToday)cls+=' today';
+    html+=`<div class="${cls}" onclick="calClick(${y},${m},${d})">${d}</div>`;
+  }
+  return html;
+}
+
+function dayStatus(date){
+  if(!pendingFrom&&!pendingTo)return'none';
+  const d=date.getTime();
+  const f=pendingFrom?pendingFrom.getTime():null;
+  const t=pendingTo?pendingTo.getTime():null;
+  if(f&&t){
+    const mn=Math.min(f,t),mx=Math.max(f,t);
+    if(d===mn)return'start';
+    if(d===mx)return'end';
+    if(d>mn&&d<mx)return'in';
+  } else if(f&&d===f)return'start';
+  return'none';
+}
+
+function calClick(y,m,d){
+  const clicked=new Date(y,m,d);
+  if(calPhase===0){pendingFrom=clicked;pendingTo=null;calPhase=1;}
+  else{
+    if(clicked<pendingFrom){pendingTo=pendingFrom;pendingFrom=clicked;}
+    else{pendingTo=clicked;}
+    calPhase=0;
+  }
+  renderCal();
+}
+
+function calNav(dir){calViewMonth+=dir;if(calViewMonth>11){calViewMonth=0;calViewYear++;}if(calViewMonth<0){calViewMonth=11;calViewYear--;}renderCal();}
+
+function updateCalLabels(){
+  document.getElementById('cal-from-label').textContent=pendingFrom?fmtDate(pendingFrom):'—';
+  document.getElementById('cal-to-label').textContent=pendingTo?fmtDate(pendingTo):pendingFrom?fmtDate(pendingFrom):'—';
+}
+
+function applyCalendar(){
+  if(!pendingFrom)return;
+  currentPeriod='custom';
+  calFrom=new Date(pendingFrom);
+  calTo=pendingTo?new Date(pendingTo):new Date(pendingFrom);
+  document.querySelectorAll('.period-tabs button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('date-pill-label').textContent=calFrom.getTime()===calTo.getTime()?fmtDate(calFrom):fmtDate(calFrom)+' – '+fmtDate(calTo);
+  closeCal();
+  loadData();
+}
+
+/* ─── PERIOD ─── */
+function getPeriodDates(){
+  if(currentPeriod==='custom'&&calFrom&&calTo){
+    const f=new Date(calFrom);
+    const t=new Date(calTo);t.setDate(t.getDate()+1);
+    return{from:f,to:t};
+  }
+  const now=new Date();
+  const sn=new Date(now.toLocaleString('en-US',{timeZone:'Europe/Stockholm'}));
+  const y=sn.getFullYear(),m=sn.getMonth(),d=sn.getDate();
   let from,to=new Date(y,m,d+1);
   if(currentPeriod==='today'){from=new Date(y,m,d);}
   else if(currentPeriod==='yesterday'){from=new Date(y,m,d-1);to=new Date(y,m,d);}
   else if(currentPeriod==='7d'){from=new Date(y,m,d-7);}
   else if(currentPeriod==='30d'){from=new Date(y,m,d-30);}
   else if(currentPeriod==='month'){from=new Date(y,m,1);}
-  else{
-    const df=document.getElementById('date-from')?.value;
-    const dt=document.getElementById('date-to')?.value;
-    if(df&&dt){from=new Date(df+'T00:00:00');to=new Date(dt+'T00:00:00');to.setDate(to.getDate()+1);}
-    else{from=new Date(y,m,d-7);}
-  }
+  else{from=new Date(y,m,d-7);}
   return{from,to};
 }
 
@@ -347,165 +714,100 @@ function showTab(tab){
   document.getElementById('tab-'+tab).classList.add('active');
   document.querySelectorAll('nav button')[TABS.indexOf(tab)].classList.add('active');
 }
-
-function showSetup(){
-  document.getElementById('setup-view').style.display='block';
-  document.getElementById('app-view').style.display='none';
-}
+function showSetup(){document.getElementById('setup-view').style.display='block';document.getElementById('app-view').style.display='none';}
 
 async function connectShopify(){
   const url=document.getElementById('shop-url').value.trim().replace(/^https?:\/\//,'').replace(/\/$/,'');
   if(!url){showSetupError('Fyll i butiks-URL.');return;}
-  const btn=document.getElementById('connect-btn');
-  btn.disabled=true;btn.textContent='Ansluter...';
+  const btn=document.getElementById('connect-btn');btn.disabled=true;btn.textContent='Ansluter...';
   try{
-    const resp=await fetch(PROXY+'/health');
-    if(!resp.ok)throw new Error('Servern svarade med '+resp.status);
+    const resp=await fetch(PROXY+'/health');if(!resp.ok)throw new Error('Servern svarade med '+resp.status);
     const data=await resp.json();
-    if(!data.connectedShops.includes(url)){
-      showSetupError('Öppna länken för att ansluta: '+PROXY+'/auth?shop='+url);
-      btn.disabled=false;btn.textContent='Anslut butik';return;
-    }
-    shopUrl=url;localStorage.setItem('pa_shop',shopUrl);
-    initApp();await loadData();
+    if(!data.connectedShops.includes(url)){showSetupError('Öppna länken för att ansluta: '+PROXY+'/auth?shop='+url);btn.disabled=false;btn.textContent='Anslut butik';return;}
+    shopUrl=url;localStorage.setItem('pa_shop',shopUrl);initApp();await loadData();
   }catch(e){showSetupError('Fel: '+e.message);btn.disabled=false;btn.textContent='Anslut butik';}
 }
-
 function showSetupError(msg){const el=document.getElementById('setup-error');el.textContent=msg;el.style.display='block';}
 
 function initApp(){
   document.getElementById('settings-shop').value=shopUrl;
   document.getElementById('settings-vat').value=localStorage.getItem('pa_vat')||vatRate;
   document.getElementById('settings-shopify-fee').value=localStorage.getItem('pa_fee')||shopifyFee;
+  document.getElementById('settings-tx-fee').value=localStorage.getItem('pa_tx_fee')||txFeeRate;
   document.getElementById('settings-currency').value=localStorage.getItem('pa_currency')||currency;
-  loadCosts();loadCogs();loadVat();loadMetaSettings();
+  loadCosts();loadCogs();loadVat();checkMetaStatus();
   document.getElementById('setup-view').style.display='none';
   document.getElementById('app-view').style.display='block';
-  document.getElementById('header-right').innerHTML='<span style="font-size:11px;color:#6b7494">'+shopUrl+'</span>';
+  document.getElementById('header-right').innerHTML=`<div class="pulse-dot"></div><span style="font-size:11px;color:var(--muted2)">${shopUrl}</span>`;
 }
-
 function disconnect(){
   if(!confirm('Koppla bort?'))return;
   localStorage.removeItem('pa_shop');shopUrl='';orders=[];products=[];
-  document.getElementById('setup-view').style.display='block';
-  document.getElementById('app-view').style.display='none';
+  document.getElementById('setup-view').style.display='block';document.getElementById('app-view').style.display='none';
   document.getElementById('header-right').innerHTML='<button class="btn-sm" onclick="showSetup()">Anslut Shopify</button>';
-  document.getElementById('connect-btn').disabled=false;
-  document.getElementById('connect-btn').textContent='Anslut butik';
+  document.getElementById('connect-btn').disabled=false;document.getElementById('connect-btn').textContent='Anslut butik';
 }
-
-async function shopifyFetch(path){
-  return fetch(PROXY+'/shopify'+path,{headers:{'Content-Type':'application/json'}});
-}
+async function shopifyFetch(path){return fetch(PROXY+'/shopify'+path,{headers:{'Content-Type':'application/json'}});}
 
 async function loadData(){
   if(!shopUrl)return;
   document.getElementById('loading-state').style.display='block';
   document.getElementById('dashboard-data').style.display='none';
   document.getElementById('error-banner').style.display='none';
-  document.getElementById('sync-status').textContent='Hämtar...';
+  setSyncStatus('Hämtar...',false);
   const{from,to}=getPeriodDates();
   try{
     [orders,products]=await Promise.all([fetchAllOrders(from,to),fetchProducts()]);
     periodRefunds=await fetchPeriodRefunds(from,to);
+    const txFeesResult=await fetchTransactionFees(from,to);
+    transactionFees=txFeesResult.total;
+    transactionFeesExact=txFeesResult.exact;
+    await checkMetaStatus();
     if(metaConnected)await syncMetaSpend(from,to);
     buildCogsTable();buildVatTable();recalc();
     document.getElementById('loading-state').style.display='none';
     document.getElementById('dashboard-data').style.display='block';
-    document.getElementById('sync-status').textContent='Synkad '+new Date().toLocaleTimeString('sv-SE',{hour:'2-digit',minute:'2-digit'})+' ('+orders.length+' ordrar)';
+    setSyncStatus('Synkad '+new Date().toLocaleTimeString('sv-SE',{hour:'2-digit',minute:'2-digit'})+' · '+orders.length+' ordrar',true);
   }catch(e){
-    document.getElementById('loading-state').style.display='none';
-    document.getElementById('dashboard-data').style.display='block';
+    document.getElementById('loading-state').style.display='none';document.getElementById('dashboard-data').style.display='block';
     const eb=document.getElementById('error-banner');
-    eb.innerHTML=e.message.includes('401')?'Session utgången. <a href="'+PROXY+'/auth?shop='+shopUrl+'" target="_blank" style="color:#3b82f6">Klicka här för att återansluta</a>':'Fel: '+e.message;
+    eb.innerHTML=e.message.includes('401')?`Session utgången. <a href="${PROXY}/auth?shop=${shopUrl}" target="_blank" style="color:var(--accent)">Klicka för att återansluta</a>`:'Fel: '+e.message;
     eb.style.display='block';
   }
 }
-
+function setSyncStatus(txt,synced){
+  const el=document.getElementById('sync-status');if(!el)return;
+  el.innerHTML=synced?`<div class="pulse-dot"></div>${txt}`:txt;
+}
 async function fetchAllOrders(from,to){
-  let all=[],pageInfo=null,first=true,done=false;
-  const fromWide=new Date(from.getTime()-3*60*60*1000);
-  const toWide=new Date(to.getTime()+3*60*60*1000);
-  const fromNum=toSthlmDateNum(from);
-  const toNum=toSthlmDateNum(to);
-  while((first||pageInfo)&&!done){
-    first=false;
-    // First request uses date filter, subsequent use page_info only
-    let url;
-    if(!pageInfo){
-      url='/admin/api/2024-01/orders.json?status=any&limit=250&created_at_min='+fromWide.toISOString()+'&created_at_max='+toWide.toISOString()+'&order=created_at+asc';
-    } else {
-      url='/admin/api/2024-01/orders.json?limit=250&page_info='+pageInfo;
-    }
-    const resp=await shopifyFetch(url);
-    if(!resp.ok)throw new Error(resp.status);
-    const data=await resp.json();
-    const batch=data.orders||[];
-    // Filter batch to our date range
-    const filtered=batch.filter(o=>{
-      const num=toSthlmDateNum(new Date(o.processed_at||o.created_at));
-      return num>=fromNum&&num<toNum;
-    });
-    all=all.concat(filtered);
-    setText('sync-status','Hämtar... '+all.length+' ordrar');
-    // Check if last order in batch is past our end date
-    if(batch.length>0){
-      const lastNum=toSthlmDateNum(new Date(batch[batch.length-1].processed_at||batch[batch.length-1].created_at));
-      if(lastNum>=toNum)done=true;
-    }
-    const link=resp.headers.get('Link')||'';
-    const nm=link.match(/page_info=([^>&"]+)[^>]*>;\s*rel="next"/);
-    pageInfo=nm?nm[1]:null;
-    if(batch.length<250)done=true;
-  }
-  return all;
+  const resp=await fetch(PROXY+'/orders?from='+from.toISOString()+'&to='+to.toISOString());
+  if(!resp.ok){if(resp.status===401)throw new Error('401');throw new Error(await resp.text());}
+  const data=await resp.json();
+  return (data.orders||[]).map(o=>({...o,line_items:typeof o.line_items==='string'?JSON.parse(o.line_items):(o.line_items||[]),refunds:typeof o.refunds==='string'?JSON.parse(o.refunds):(o.refunds||[])}));
 }
-
 async function fetchPeriodRefunds(from,to){
-  // Fetch orders updated in period that have refunds created in period
-  let total=0;
-  const fromNum=toSthlmDateNum(from);
-  const toNum=toSthlmDateNum(to);
-  let all=[],pageInfo=null,first=true;
-  const fromWide=new Date(from.getTime()-3*60*60*1000);
-  const toWide=new Date(to.getTime()+3*60*60*1000);
-  while(first||pageInfo){
-    first=false;
-    let url='/admin/api/2024-01/orders.json?status=any&limit=250&updated_at_min='+fromWide.toISOString()+'&updated_at_max='+toWide.toISOString()+'&fields=id,processed_at,created_at,refunds';
-    if(pageInfo)url+='&page_info='+pageInfo;
-    const resp=await shopifyFetch(url);
-    if(!resp.ok)break;
-    const data=await resp.json();
-    all=all.concat(data.orders||[]);
-    const link=resp.headers.get('Link')||'';
-    const m=link.match(/<[^>]*page_info=([^>&"]+)[^>]*>;\s*rel="next"/);
-    pageInfo=m?m[1]:null;
-  }
-  // Sum refund transactions created in this period
-  all.forEach(o=>{
-    (o.refunds||[]).forEach(r=>{
-      const rNum=toSthlmDateNum(new Date(r.created_at));
-      if(rNum>=fromNum&&rNum<toNum){
-        (r.transactions||[]).forEach(t=>{
-          if(t.kind==='refund'&&t.status==='success'){
-            total+=parseFloat(t.amount)||0;
-          }
-        });
-      }
-    });
-  });
-  return total;
+  try{const resp=await fetch(PROXY+'/refunds?from='+from.toISOString()+'&to='+to.toISOString());if(!resp.ok)return 0;return(await resp.json()).total||0;}catch(e){return 0;}
 }
 
+async function fetchTransactionFees(from,to){
+  try{
+    const resp=await fetch(PROXY+'/transaction-fees?from='+from.toISOString()+'&to='+to.toISOString());
+    if(!resp.ok)return{total:0,exact:false};
+    const data=await resp.json();
+    // total===0 with no error could mean "no payouts yet in this period" rather than "fees are zero"
+    // we still treat it as exact since the payouts endpoint responded successfully
+    return{total:data.total||0,exact:!data.error};
+  }catch(e){return{total:0,exact:false};}
+}
 async function fetchProducts(){
   const resp=await shopifyFetch('/admin/api/2024-01/products.json?limit=250&fields=id,title,variants');
-  if(!resp.ok)return[];
-  return(await resp.json()).products||[];
+  if(!resp.ok)return[];return(await resp.json()).products||[];
 }
 
 function recalc(){
   const defaultVat=parseFloat(document.getElementById('settings-vat')?.value)||vatRate||25;
   const shopFee=parseFloat(document.getElementById('settings-shopify-fee')?.value)||0;
+  const txFeeRateVal=parseFloat(document.getElementById('settings-tx-fee')?.value)||txFeeRate||0;
   const metaAds=metaConnected?metaSpend:(parseFloat(document.getElementById('cost-meta')?.value)||0);
   const googleAds=parseFloat(document.getElementById('cost-google')?.value)||0;
   const tiktokAds=parseFloat(document.getElementById('cost-tiktok')?.value)||0;
@@ -515,15 +817,14 @@ function recalc(){
   const totalAds=metaAds+googleAds+tiktokAds+snapAds;
   const nOrders=orders.length;
   let grossRev=0,vatAmt=0,totalCogs=0;
-  const productStats={};const customerStats={};
+  const productStats={},customerStats={};
   orders.forEach(o=>{
-    const price=parseFloat(o.current_total_price)||parseFloat(o.total_price)||0;
-    grossRev+=price;
+    const price=parseFloat(o.total_price)||0;grossRev+=price;
     const email=o.email||String(o.id);
     if(!customerStats[email])customerStats[email]={email,orders:0,revenue:0};
     customerStats[email].orders++;customerStats[email].revenue+=price;
     (o.line_items||[]).forEach(li=>{
-      const pid=li.product_id;const vid=li.variant_id;
+      const pid=li.product_id,vid=li.variant_id;
       const cogsKey=vid?'v'+vid:'p'+pid;
       const unitCogs=cogsMap[cogsKey]!==undefined?cogsMap[cogsKey]:(cogsMap['p'+pid]||0);
       totalCogs+=unitCogs*li.quantity;
@@ -534,19 +835,16 @@ function recalc(){
       productStats[pid].qty+=li.quantity;productStats[pid].revenue+=lineRev;productStats[pid].cogs+=unitCogs*li.quantity;
     });
   });
-  // Subtract refunds made in period (from older orders)
   const netRevAfterRefunds=grossRev-periodRefunds;
   const netRev=netRevAfterRefunds-vatAmt;
   const shopifyFeeAmt=netRev*(shopFee/100);
+  // Use exact transaction fees from Shopify Payments payouts when available, otherwise fall back to the estimated rate
+  const txFeesAmt=transactionFeesExact?transactionFees:netRevAfterRefunds*(txFeeRateVal/100);
   const shippingTotal=shippingPerOrder*nOrders+fixedLogistics;
   let customTotal=0;
-  customCosts.forEach(c=>{
-    let amt=parseFloat(c.amount)||0;
-    if(c.type==='monthly'){const{from,to}=getPeriodDates();const days=Math.max(1,(to-from)/(1000*60*60*24));amt=amt*(days/30);}
-    customTotal+=amt;
-  });
+  customCosts.forEach(c=>{let amt=parseFloat(c.amount)||0;if(c.type==='monthly'){const{from,to}=getPeriodDates();const days=Math.max(1,(to-from)/(1000*60*60*24));amt=amt*(days/30);}customTotal+=amt;});
   const grossProfit=netRev-totalCogs;
-  const opex=shopifyFeeAmt+shippingTotal+totalAds+customTotal;
+  const opex=shopifyFeeAmt+shippingTotal+totalAds+customTotal+txFeesAmt;
   const netProfit=grossProfit-opex;
   const aov=nOrders>0?grossRev/nOrders:0;
   const roas=totalAds>0?netRev/totalAds:0;
@@ -554,70 +852,100 @@ function recalc(){
   const netMargin=netRev>0?netProfit/netRev*100:0;
   const totalCosts=periodRefunds+vatAmt+totalCogs+opex;
 
-  // Display gross rev minus refunds as "Total omsättning"
-  setText('m-revenue',fmt(netRevAfterRefunds));setText('m-orders',nOrders+' ordrar');
-  setText('m-gross',fmt(grossProfit));setText('m-gross-margin',fmtPct(grossMargin)+' marginal');
-  const ne=document.getElementById('m-net');if(ne){ne.textContent=fmt(netProfit);ne.className='metric-value '+(netProfit>=0?'green':'red');}
-  const nm=document.getElementById('m-net-margin');if(nm){nm.textContent=fmtPct(netMargin)+' marginal';nm.className='metric-sub';}
-  setText('m-costs',fmt(totalCosts));setText('m-cost-pct',fmtPct(netRevAfterRefunds>0?totalCosts/netRevAfterRefunds*100:0)+' av omsättning');
-  setText('m-aov',fmt(aov));setText('m-roas',roas>0?roas.toFixed(2)+'x':'-');
-
+  const heroEl=document.getElementById('hero-net');
+  if(heroEl){heroEl.textContent=fmt(netProfit);heroEl.style.color='var(--text)';}
+  setText('hero-net-sub',fmtPct(netMargin)+' nettomarginal · '+nOrders+' ordrar');
+  setText('kpi-revenue',fmt(netRevAfterRefunds));setText('kpi-orders',nOrders+' ordrar');
+  setText('kpi-gross',fmt(grossProfit));setText('kpi-gross-margin',fmtPct(grossMargin)+' marginal');
+  setText('kpi-costs',fmt(totalCosts));setText('kpi-cost-pct',fmtPct(netRevAfterRefunds>0?totalCosts/netRevAfterRefunds*100:0)+' av omsättning');
+  setText('m-aov',fmt(aov));
+  setText('m-roas',roas>0?roas.toFixed(2)+'x':'—');
+  const nmEl=document.getElementById('m-net-margin');if(nmEl){nmEl.textContent=fmtPct(netMargin);nmEl.className='metric-value white';}
+  setText('m-gross-margin',fmtPct(grossMargin));
   setText('bd-gross-rev',fmt(grossRev));
-  if(periodRefunds>0)setRed('bd-refunds','−'+fmt(periodRefunds));else setText('bd-refunds','−0 kr');
+  if(periodRefunds>0)setRed('bd-refunds','−'+fmt(periodRefunds));else setText('bd-refunds','—');
   setRed('bd-vat','−'+fmt(vatAmt));setRed('bd-shopify','−'+fmt(shopifyFeeAmt));
   setRed('bd-cogs','−'+fmt(totalCogs));setRed('bd-shipping','−'+fmt(shippingTotal));
   setRed('bd-ads','−'+fmt(totalAds));setRed('bd-custom','−'+fmt(customTotal));
-  const bn=document.getElementById('bd-net');if(bn){bn.textContent=fmt(netProfit);bn.className=netProfit>=0?'green':'red';}
-
-  setText('pl-gross-rev',fmt(grossRev));
-  setRed('pl-refunds','−'+fmt(periodRefunds));setRed('pl-vat','−'+fmt(vatAmt));setText('pl-net-rev',fmt(netRev));
+  setRed('bd-txfees','−'+fmt(txFeesAmt));
+  setText('txfees-badge',transactionFeesExact?'(exakt)':'(uppskattat)');
+  const bn=document.getElementById('bd-net');if(bn){bn.textContent=fmt(netProfit);bn.style.color=netProfit>=0?'var(--text)':'var(--red)';bn.className='';}
+  setText('pl-gross-rev',fmt(grossRev));setRed('pl-refunds','−'+fmt(periodRefunds));setRed('pl-vat','−'+fmt(vatAmt));setText('pl-net-rev',fmt(netRev));
   setRed('pl-cogs','−'+fmt(totalCogs));
-  const gp=document.getElementById('pl-gross-profit');if(gp){gp.textContent=fmt(grossProfit);gp.className=grossProfit>=0?'green':'red';}
-  setRed('pl-shipping','−'+fmt(shippingTotal));setRed('pl-ads','−'+fmt(totalAds));setRed('pl-shopify','−'+fmt(shopifyFeeAmt));setRed('pl-custom','−'+fmt(customTotal));
+  const gp=document.getElementById('pl-gross-profit');if(gp){gp.textContent=fmt(grossProfit);gp.style.color=grossProfit>=0?'var(--text)':'var(--red)';gp.className='';}
+  setRed('pl-shipping','−'+fmt(shippingTotal));setRed('pl-ads','−'+fmt(totalAds));setRed('pl-shopify','−'+fmt(shopifyFeeAmt));setRed('pl-custom','−'+fmt(customTotal));setRed('pl-txfees','−'+fmt(txFeesAmt));
   setRed('pl-opex','−'+fmt(opex));
-  const pn=document.getElementById('pl-net');if(pn){pn.textContent=fmt(netProfit);pn.className=netProfit>=0?'green':'red';}
-  setText('pl-net-margin',fmtPct(netMargin));
-
+  const pn=document.getElementById('pl-net');if(pn){pn.textContent=fmt(netProfit);pn.style.color=netProfit>=0?'var(--text)':'var(--red)';pn.className='';}
+  setText('pl-net-margin2',fmtPct(netMargin));
   const prodArr=Object.values(productStats).sort((a,b)=>b.revenue-a.revenue);
   const pt=document.getElementById('products-table');
-  if(pt)pt.innerHTML=prodArr.map(p=>{const gp=p.revenue-p.cogs;const mg=p.revenue>0?gp/p.revenue*100:0;return`<tr><td>${p.title}</td><td>${fmtNum(p.qty)}</td><td>${fmt(p.revenue)}</td><td class="red">${fmt(p.cogs)}</td><td class="${gp>=0?'green':'red'}">${fmt(gp)}</td><td><span class="badge ${mg>=30?'green':'red'}">${fmtPct(mg)}</span></td></tr>`;}).join('')||'<tr><td colspan="6" style="text-align:center;color:#6b7494;padding:24px">Inga ordrar</td></tr>';
-
+  if(pt)pt.innerHTML=prodArr.map(p=>{const gp2=p.revenue-p.cogs;const mg=p.revenue>0?gp2/p.revenue*100:0;return`<tr><td>${p.title}</td><td>${fmtNum(p.qty)}</td><td>${fmt(p.revenue)}</td><td class="red">${fmt(p.cogs)}</td><td class="${gp2>=0?'green':'red'}">${fmt(gp2)}</td><td><span class="badge ${mg>=30?'green':'red'}">${fmtPct(mg)}</span></td></tr>`;}).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--muted2);padding:32px">Inga ordrar</td></tr>';
   const custArr=Object.values(customerStats).sort((a,b)=>b.revenue-a.revenue);
-  const repeat=custArr.filter(c=>c.orders>1).length;const tot=custArr.length;
+  const repeat=custArr.filter(c=>c.orders>1).length,tot=custArr.length;
   setText('ltv-customers',fmtNum(tot));setText('ltv-repeat',fmtNum(repeat));
-  setText('ltv-repeat-pct',tot>0?fmtPct(repeat/tot*100)+' av kunder':'-');
-  setText('ltv-avg-orders',tot>0?(orders.length/tot).toFixed(1):'-');
+  setText('ltv-repeat-pct',tot>0?fmtPct(repeat/tot*100)+' av kunder':'—');
+  setText('ltv-avg-orders',tot>0?(orders.length/tot).toFixed(1):'—');
   setText('ltv-value',fmt(tot>0?grossRev/tot:0));
   const lt=document.getElementById('ltv-table');
   if(lt)lt.innerHTML=custArr.slice(0,20).map(c=>`<tr><td>${c.email||'Okänd'}</td><td>${c.orders}</td><td>${fmt(c.revenue)}</td><td>${fmt(c.revenue/c.orders)}</td></tr>`).join('');
-
   buildDailyChart(orders);
+  buildDonut({cogs:totalCogs,shipping:shippingTotal,ads:totalAds,vat:vatAmt,custom:customTotal,shopify:shopifyFeeAmt,txfees:txFeesAmt,refunds:periodRefunds});
 }
 
 function buildDailyChart(ords){
   const{from,to}=getPeriodDates();
   const days=Math.max(1,Math.round((to-from)/(1000*60*60*24)));
   const dayMap={};
-  for(let i=0;i<days;i++){
-    const d=new Date(from);d.setDate(d.getDate()+i);
-    const s=new Date(d.toLocaleString('en-US',{timeZone:'Europe/Stockholm'}));
-    const key=s.getFullYear()+'-'+String(s.getMonth()+1).padStart(2,'0')+'-'+String(s.getDate()).padStart(2,'0');
-    dayMap[key]=0;
-  }
-  ords.forEach(o=>{
-    const s=new Date(new Date(o.processed_at||o.created_at).toLocaleString('en-US',{timeZone:'Europe/Stockholm'}));
-    const key=s.getFullYear()+'-'+String(s.getMonth()+1).padStart(2,'0')+'-'+String(s.getDate()).padStart(2,'0');
-    if(dayMap[key]!==undefined)dayMap[key]+=parseFloat(o.current_total_price)||parseFloat(o.total_price)||0;
-  });
+  for(let i=0;i<days;i++){const d=new Date(from);d.setDate(d.getDate()+i);const s=new Date(d.toLocaleString('en-US',{timeZone:'Europe/Stockholm'}));const key=s.getFullYear()+'-'+String(s.getMonth()+1).padStart(2,'0')+'-'+String(s.getDate()).padStart(2,'0');dayMap[key]=0;}
+  ords.forEach(o=>{const s=new Date(new Date(o.processed_at||o.created_at).toLocaleString('en-US',{timeZone:'Europe/Stockholm'}));const key=s.getFullYear()+'-'+String(s.getMonth()+1).padStart(2,'0')+'-'+String(s.getDate()).padStart(2,'0');if(dayMap[key]!==undefined)dayMap[key]+=parseFloat(o.total_price)||0;});
   const entries=Object.entries(dayMap);
   const maxVal=Math.max(...entries.map(e=>e[1]),1);
   const chart=document.getElementById('daily-chart');if(!chart)return;
-  if(entries.length>90){chart.innerHTML='<p style="color:#6b7494;font-size:12px">För många dagar.</p>';return;}
+  if(entries.length>90){chart.innerHTML='<p style="color:var(--muted2)">För många dagar.</p>';return;}
   chart.innerHTML=entries.map(([date,val])=>{
     const h=Math.max(2,Math.round(val/maxVal*100));
     const label=days<=14?date.slice(5):date.slice(5,7);
-    return`<div class="chart-bar-col"><div class="chart-bar" style="height:${h}%;background:#3b82f6;opacity:${val>0?1:.2}" title="${date}: ${Math.round(val)} ${currency}"></div><span class="chart-label">${label}</span></div>`;
+    const op=val>0?1:.15;
+    return`<div class="chart-bar-col"><div class="chart-bar" style="height:${h}%;background:linear-gradient(180deg,#4a90d9 0%,#5e7fe0 100%);opacity:${op}" title="${date}: ${Math.round(val)} ${currency}"></div><span class="chart-label">${label}</span></div>`;
   }).join('');
+}
+
+function buildDonut(data){
+  const COLORS={cogs:'#4a90d9',shipping:'#2dd4a0',ads:'#e8a83a',vat:'#8b82f0',custom:'#38bdf8',shopify:'#c07bb5',txfees:'#f59e6b',refunds:'#e05c6e'};
+  const LABELS={cogs:'COGS',shipping:'Frakt / 3PL',ads:'Annonser',vat:'Moms',custom:'Övrigt',shopify:'Shopify-avgift',txfees:'Transaktionsavgifter',refunds:'Returer'};
+  const entries=Object.entries(data).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  const total=entries.reduce((s,[,v])=>s+v,0);
+  const svg=document.getElementById('donut-svg');
+  const legend=document.getElementById('donut-legend');
+  const tot=document.getElementById('donut-total');
+  if(total===0){if(svg)svg.innerHTML='';if(legend)legend.innerHTML='';if(tot)tot.textContent='—';return;}
+  if(tot){
+    const parts=fmt(total).split(',');
+    tot.innerHTML=parts[0]+'<br><span style="font-size:10px;font-weight:600;color:var(--muted2)">,'+parts[1]+'</span>';
+  }
+  const cx=80,cy=80,r=68,ir=48,gap=0.025;
+  let angle=-Math.PI/2,paths='',glows='';
+  entries.forEach(([key,val])=>{
+    const frac=val/total;
+    const sweep=Math.max(frac*Math.PI*2-gap,0.01);
+    const x1=cx+r*Math.cos(angle+gap/2),y1=cy+r*Math.sin(angle+gap/2);
+    const x2=cx+r*Math.cos(angle+sweep+gap/2),y2=cy+r*Math.sin(angle+sweep+gap/2);
+    const ix1=cx+ir*Math.cos(angle+gap/2),iy1=cy+ir*Math.sin(angle+gap/2);
+    const ix2=cx+ir*Math.cos(angle+sweep+gap/2),iy2=cy+ir*Math.sin(angle+sweep+gap/2);
+    const large=sweep>Math.PI?1:0;
+    const col=COLORS[key]||'#555';
+    paths+=`<path d="M${x1.toFixed(2)},${y1.toFixed(2)} A${r},${r} 0 ${large},1 ${x2.toFixed(2)},${y2.toFixed(2)} L${ix2.toFixed(2)},${iy2.toFixed(2)} A${ir},${ir} 0 ${large},0 ${ix1.toFixed(2)},${iy1.toFixed(2)} Z" fill="${col}"><title>${LABELS[key]}: ${fmt(val)}</title></path>`;
+    angle+=sweep+gap;
+  });
+  // inner circle background
+  svg.innerHTML=`<circle cx="${cx}" cy="${cy}" r="${ir-1}" fill="var(--surface)"/>${paths}`;
+  legend.innerHTML=entries.map(([key,val])=>`
+    <div class="legend-row">
+      <div class="legend-swatch" style="background:${COLORS[key]||'#555'}"></div>
+      <span class="legend-name">${LABELS[key]||key}</span>
+      <span class="legend-amt">${fmt(val)}</span>
+      <span class="legend-pct">${fmtPct(total>0?val/total*100:0)}</span>
+    </div>`).join('');
 }
 
 function buildCogsTable(){
@@ -625,135 +953,93 @@ function buildCogsTable(){
   let rows='';
   products.forEach(p=>{
     const variants=p.variants||[];
-    if(variants.length<=1){
-      const key='p'+p.id;
-      rows+=`<tr><td>${p.title}</td><td style="color:#6b7494">—</td><td><input type="number" placeholder="0" value="${cogsMap[key]||''}" class="ci" style="width:100px" onchange="cogsMap['${key}']=parseFloat(this.value)||0;saveCogs();recalc()"></td></tr>`;
-    }else{
-      rows+=`<tr style="background:#1a1f30"><td colspan="3" style="font-size:11px;color:#9ca3b8;padding:5px 11px">${p.title}</td></tr>`;
-      variants.forEach(v=>{
-        const key='v'+v.id;
-        rows+=`<tr><td style="padding-left:20px;color:#9ca3b8">${v.title}</td><td style="color:#6b7494;font-size:11px">${v.sku||'—'}</td><td><input type="number" placeholder="0" value="${cogsMap[key]||''}" class="ci" style="width:100px" onchange="cogsMap['${key}']=parseFloat(this.value)||0;saveCogs();recalc()"></td></tr>`;
-      });
-    }
+    if(variants.length<=1){const key='p'+p.id;rows+=`<tr><td>${p.title}</td><td style="color:var(--muted)">—</td><td><input type="number" placeholder="0" value="${cogsMap[key]||''}" class="ci" style="width:100px" onchange="cogsMap['${key}']=parseFloat(this.value)||0;saveCogs();recalc()"></td></tr>`;}
+    else{rows+=`<tr style="background:rgba(16,25,40,.6)"><td colspan="3" style="font-size:11px;color:var(--muted2);padding:5px 14px">${p.title}</td></tr>`;variants.forEach(v=>{const key='v'+v.id;rows+=`<tr><td style="padding-left:22px;color:var(--muted2)">${v.title}</td><td style="color:var(--muted);font-size:11px">${v.sku||'—'}</td><td><input type="number" placeholder="0" value="${cogsMap[key]||''}" class="ci" style="width:100px" onchange="cogsMap['${key}']=parseFloat(this.value)||0;saveCogs();recalc()"></td></tr>`;});}
   });
-  tbl.innerHTML=rows||'<tr><td colspan="3" style="text-align:center;color:#6b7494;padding:24px">Anslut butiken</td></tr>';
+  tbl.innerHTML=rows||'<tr><td colspan="3" style="text-align:center;color:var(--muted2);padding:32px">Anslut butiken</td></tr>';
 }
-
 function buildVatTable(){
   const tbl=document.getElementById('vat-table');if(!tbl)return;
   const defaultVat=parseFloat(document.getElementById('settings-vat')?.value)||vatRate||25;
-  tbl.innerHTML=products.map(p=>{
-    const pVat=vatMap[p.id];
-    const status=pVat!==undefined?`<span style="color:#3b82f6;font-size:11px">${pVat}%</span>`:`<span style="color:#6b7494;font-size:11px">Standard ${defaultVat}%</span>`;
-    return`<tr><td>${p.title}</td><td><div style="display:flex;align-items:center;gap:6px"><input type="number" placeholder="${defaultVat}" value="${pVat!==undefined?pVat:''}" class="ci" style="width:80px" onchange="setProductVat(${p.id},this.value);recalc()"><span style="font-size:11px;color:#6b7494">%</span></div></td><td>${status}</td></tr>`;
-  }).join('')||'<tr><td colspan="3" style="text-align:center;color:#6b7494;padding:24px">Anslut butiken</td></tr>';
+  tbl.innerHTML=products.map(p=>{const pVat=vatMap[p.id];const status=pVat!==undefined?`<span style="color:var(--accent);font-size:11px">${pVat}%</span>`:`<span style="color:var(--muted2);font-size:11px">Standard ${defaultVat}%</span>`;return`<tr><td>${p.title}</td><td><div style="display:flex;align-items:center;gap:6px"><input type="number" placeholder="${defaultVat}" value="${pVat!==undefined?pVat:''}" class="ci" style="width:80px" onchange="setProductVat(${p.id},this.value);recalc()"><span style="font-size:11px;color:var(--muted2)">%</span></div></td><td>${status}</td></tr>`;}).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--muted2);padding:32px">Anslut butiken</td></tr>';
 }
-
-async function resyncAll(){
-  if(!confirm('Synka om alla ordrar från Shopify? Det kan ta några minuter.'))return;
-  const resp=await fetch(PROXY+'/sync',{method:'POST'});
-  const data=await resp.json();
-  setText('sync-status','Full sync startad...');
-  setTimeout(()=>loadData(),30000);
-}
-
+async function resyncAll(){if(!confirm('Synka om alla ordrar? Kan ta några minuter.'))return;await fetch(PROXY+'/sync',{method:'POST'});setSyncStatus('Full sync startad...',false);setTimeout(()=>loadData(),30000);}
 function setText(id,val){const el=document.getElementById(id);if(el)el.textContent=val;}
-function setRed(id,val){const el=document.getElementById(id);if(el){el.textContent=val;el.className='red';}}
-
+function setRed(id,val){const el=document.getElementById(id);if(el){el.textContent=val;el.style.color='var(--muted2)';el.className='';}}
 function setPeriod(period,btn){
-  currentPeriod=period;
+  currentPeriod=period;calFrom=null;calTo=null;
   document.querySelectorAll('.period-tabs button').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  document.getElementById('custom-dates').style.display=period==='custom'?'flex':'none';
-  if(period!=='custom')loadData();
+  document.getElementById('date-pill-label').textContent='Anpassad';
+  loadData();
 }
-
-function showMetaSetup(){const f=document.getElementById('meta-api-form');f.style.display=f.style.display==='none'?'block':'none';}
-
-async function connectMeta(){
-  const token=document.getElementById('meta-token-input').value.trim();
-  const accountId=document.getElementById('meta-account-input').value.trim();
-  if(!token||!accountId){alert('Fyll i token och konto-ID');return;}
-  try{
-    const resp=await fetch(`https://graph.facebook.com/v19.0/${accountId}?fields=name&access_token=${token}`);
-    const data=await resp.json();
-    if(data.error){alert('Meta fel: '+data.error.message);return;}
-    metaToken=token;metaAccountId=accountId;metaConnected=true;
-    localStorage.setItem('pa_meta_token',metaToken);localStorage.setItem('pa_meta_account',metaAccountId);
-    updateMetaStatus();document.getElementById('meta-api-form').style.display='none';
-    const{from,to}=getPeriodDates();await syncMetaSpend(from,to);recalc();
-  }catch(e){alert('Fel: '+e.message);}
+function connectMeta(){
+  window.open(PROXY+'/auth/meta?shop='+encodeURIComponent(shopUrl),'_blank');
+  setText('meta-sync-note','Slutför anslutningen i den nya fliken, klicka sen Uppdatera.');
 }
-
-async function syncMetaSpend(from,to){
-  if(!metaConnected)return;
+async function disconnectMeta(){
+  if(!confirm('Koppla bort Meta Ads?'))return;
+  try{await fetch(PROXY+'/meta-disconnect',{method:'POST'});}catch(e){}
+  metaConnected=false;metaSpend=0;
+  updateMetaStatus();
+  const el=document.getElementById('cost-meta');if(el){el.value='';el.disabled=true;}
+  setText('meta-sync-note','Ej ansluten');
+  recalc();
+}
+async function checkMetaStatus(){
   try{
-    const since=from.toISOString().slice(0,10);const until=to.toISOString().slice(0,10);
-    const resp=await fetch(`${PROXY}/meta/v19.0/${metaAccountId}/insights?fields=spend&time_range={'since':'${since}','until':'${until}'}&access_token=${metaToken}`);
+    const resp=await fetch(PROXY+'/meta-status');
     const data=await resp.json();
-    if(data.data&&data.data[0]){
-      metaSpend=parseFloat(data.data[0].spend)||0;
-      const el=document.getElementById('cost-meta');if(el)el.value=Math.round(metaSpend);
-      document.getElementById('meta-sync-note').textContent='Autosynkad: '+fmt(metaSpend);
+    metaConnected=!!data.connected;
+    updateMetaStatus();
+    const el=document.getElementById('cost-meta');
+    if(metaConnected){
+      if(el)el.disabled=true;
+      setText('meta-sync-note',data.adAccountName?('Anslutet: '+data.adAccountName):'Anslutet');
+    }else{
+      if(el)el.disabled=false;
     }
   }catch(e){}
 }
-
+async function syncMetaSpend(from,to){
+  if(!metaConnected)return;
+  try{
+    const resp=await fetch(`${PROXY}/meta-spend?from=${from.toISOString()}&to=${to.toISOString()}`);
+    const data=await resp.json();
+    if(data.error){setText('meta-sync-note','Fel: '+data.error);return;}
+    metaSpend=parseFloat(data.total)||0;
+    const el=document.getElementById('cost-meta');if(el)el.value=Math.round(metaSpend);
+    setText('meta-sync-note','Autosynkad: '+fmt(metaSpend));
+  }catch(e){setText('meta-sync-note','Kunde inte hämta spend');}
+}
 function updateMetaStatus(){
-  const dot=document.getElementById('meta-dot');const txt=document.getElementById('meta-status-text');
-  if(metaConnected){dot.className='dot green';txt.textContent='Ansluten';}else{dot.className='dot';txt.textContent='Ej kopplad';}
+  const dot=document.getElementById('meta-dot'),txt=document.getElementById('meta-status-text');
+  const connectBtn=document.getElementById('meta-connect-btn'),disconnectBtn=document.getElementById('meta-disconnect-btn');
+  if(metaConnected){
+    dot.className='dot green';txt.textContent='Ansluten';
+    if(connectBtn)connectBtn.style.display='none';
+    if(disconnectBtn)disconnectBtn.style.display='inline-block';
+  }else{
+    dot.className='dot';txt.textContent='Ej kopplad';
+    if(connectBtn)connectBtn.style.display='inline-block';
+    if(disconnectBtn)disconnectBtn.style.display='none';
+  }
 }
-function loadMetaSettings(){
-  const t=localStorage.getItem('pa_meta_token');const a=localStorage.getItem('pa_meta_account');
-  if(t&&a){metaToken=t;metaAccountId=a;metaConnected=true;updateMetaStatus();}
-}
-
 function addCustomCost(){customCosts.push({name:'',amount:0,type:'monthly'});renderCustomCosts();}
 function removeCustomCost(i){customCosts.splice(i,1);saveCosts();renderCustomCosts();recalc();}
-function renderCustomCosts(){
-  const list=document.getElementById('custom-costs-list');if(!list)return;
-  list.innerHTML=customCosts.map((c,i)=>`<div class="custom-item"><input placeholder="Namn" value="${c.name||''}" class="ci" style="flex:1" onchange="customCosts[${i}].name=this.value;saveCosts()"><input type="number" placeholder="Belopp" value="${c.amount||''}" class="ci" style="width:90px" onchange="customCosts[${i}].amount=parseFloat(this.value)||0;saveCosts();recalc()"><select class="ci" onchange="customCosts[${i}].type=this.value;saveCosts();recalc()"><option value="monthly" ${c.type==='monthly'?'selected':''}>/ mån</option><option value="once" ${c.type==='once'?'selected':''}>Engång</option></select><button class="rm" onclick="removeCustomCost(${i})">✕</button></div>`).join('');
-}
-
-function saveCosts(){
-  const g=id=>{const el=document.getElementById(id);return el?el.value:0;};
-  localStorage.setItem('pa_costs',JSON.stringify({meta:g('cost-meta'),google:g('cost-google'),tiktok:g('cost-tiktok'),snap:g('cost-snap'),shippingPerOrder:g('cost-shipping-per-order'),logistics:g('cost-3pl-fixed'),custom:customCosts}));
-}
-function loadCosts(){
-  const raw=localStorage.getItem('pa_costs');if(!raw)return;
-  try{
-    const c=JSON.parse(raw);
-    const sv=(id,v)=>{const el=document.getElementById(id);if(el&&v!==undefined&&v!=='')el.value=v;};
-    sv('cost-meta',c.meta);sv('cost-google',c.google);sv('cost-tiktok',c.tiktok);sv('cost-snap',c.snap);
-    sv('cost-shipping-per-order',c.shippingPerOrder);sv('cost-3pl-fixed',c.logistics);
-    customCosts=c.custom||[];renderCustomCosts();
-  }catch(e){}
-}
-function setProductVat(pid,val){
-  if(val===''||val===null){delete vatMap[pid];}else{vatMap[pid]=parseFloat(val);}
-  saveVat();buildVatTable();
-}
+function renderCustomCosts(){const list=document.getElementById('custom-costs-list');if(!list)return;list.innerHTML=customCosts.map((c,i)=>`<div class="custom-item"><input placeholder="Namn" value="${c.name||''}" class="ci" style="flex:1" onchange="customCosts[${i}].name=this.value;saveCosts()"><input type="number" placeholder="Belopp" value="${c.amount||''}" class="ci" style="width:90px" onchange="customCosts[${i}].amount=parseFloat(this.value)||0;saveCosts();recalc()"><select class="ci" onchange="customCosts[${i}].type=this.value;saveCosts();recalc()"><option value="monthly" ${c.type==='monthly'?'selected':''}>/ mån</option><option value="once" ${c.type==='once'?'selected':''}>Engång</option></select><button class="rm" onclick="removeCustomCost(${i})">✕</button></div>`).join('');}
+function saveCosts(){const g=id=>{const el=document.getElementById(id);return el?el.value:0;};localStorage.setItem('pa_costs',JSON.stringify({meta:g('cost-meta'),google:g('cost-google'),tiktok:g('cost-tiktok'),snap:g('cost-snap'),shippingPerOrder:g('cost-shipping-per-order'),logistics:g('cost-3pl-fixed'),custom:customCosts}));}
+function loadCosts(){const raw=localStorage.getItem('pa_costs');if(!raw)return;try{const c=JSON.parse(raw);const sv=(id,v)=>{const el=document.getElementById(id);if(el&&v!==undefined&&v!=='')el.value=v;};sv('cost-meta',c.meta);sv('cost-google',c.google);sv('cost-tiktok',c.tiktok);sv('cost-snap',c.snap);sv('cost-shipping-per-order',c.shippingPerOrder);sv('cost-3pl-fixed',c.logistics);customCosts=c.custom||[];renderCustomCosts();}catch(e){}}
+function setProductVat(pid,val){if(val===''||val===null){delete vatMap[pid];}else{vatMap[pid]=parseFloat(val);}saveVat();buildVatTable();}
 function saveVat(){localStorage.setItem('pa_vat_map',JSON.stringify(vatMap));}
 function loadVat(){const raw=localStorage.getItem('pa_vat_map');if(raw)try{vatMap=JSON.parse(raw);}catch(e){}}
 function saveCogs(){localStorage.setItem('pa_cogs',JSON.stringify(cogsMap));}
 function loadCogs(){const raw=localStorage.getItem('pa_cogs');if(raw)try{cogsMap=JSON.parse(raw);}catch(e){}}
-function saveSettings(){
-  const vat=document.getElementById('settings-vat')?.value;
-  const fee=document.getElementById('settings-shopify-fee')?.value;
-  const cur=document.getElementById('settings-currency')?.value;
-  if(vat){vatRate=parseFloat(vat);localStorage.setItem('pa_vat',vat);}
-  if(fee){shopifyFee=parseFloat(fee);localStorage.setItem('pa_fee',fee);}
-  if(cur){currency=cur;localStorage.setItem('pa_currency',cur);}
-}
-
+function saveSettings(){const vat=document.getElementById('settings-vat')?.value,fee=document.getElementById('settings-shopify-fee')?.value,txfee=document.getElementById('settings-tx-fee')?.value,cur=document.getElementById('settings-currency')?.value;if(vat){vatRate=parseFloat(vat);localStorage.setItem('pa_vat',vat);}if(fee){shopifyFee=parseFloat(fee);localStorage.setItem('pa_fee',fee);}if(txfee!==undefined){txFeeRate=parseFloat(txfee)||0;localStorage.setItem('pa_tx_fee',txfee);}if(cur){currency=cur;localStorage.setItem('pa_currency',cur);}}
 window.addEventListener('load',()=>{
-  const shop=localStorage.getItem('pa_shop');
-  const vat=localStorage.getItem('pa_vat');
-  const fee=localStorage.getItem('pa_fee');
-  const cur=localStorage.getItem('pa_currency');
-  if(vat)vatRate=parseFloat(vat);
-  if(fee)shopifyFee=parseFloat(fee);
-  if(cur)currency=cur;
+  const shop=localStorage.getItem('pa_shop'),vat=localStorage.getItem('pa_vat'),fee=localStorage.getItem('pa_fee'),cur=localStorage.getItem('pa_currency');
+  if(vat)vatRate=parseFloat(vat);if(fee)shopifyFee=parseFloat(fee);if(cur)currency=cur;
+  const txfee=localStorage.getItem('pa_tx_fee');if(txfee)txFeeRate=parseFloat(txfee);
   if(shop){shopUrl=shop;initApp();loadData();}
 });
 </script>
