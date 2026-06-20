@@ -200,7 +200,12 @@ app.get('/meta-spend', async (req, res) => {
     }
 
     const since = from.slice(0, 10);
-    const until = to.slice(0, 10);
+    // Meta's time_range.until is INCLUSIVE, but our 'to' date from the frontend is EXCLUSIVE
+    // (it represents "midnight at the start of the day after the period ends", matching the Shopify query logic).
+    // So we subtract one day to get the correct inclusive end date for Meta.
+    const toDate = new Date(to);
+    toDate.setUTCDate(toDate.getUTCDate() - 1);
+    const until = toDate.toISOString().slice(0, 10);
     const timeRange = encodeURIComponent(JSON.stringify({ since, until }));
     const insights = await httpsGetJson('graph.facebook.com', `/v19.0/${ad_account_id}/insights?fields=spend&time_range=${timeRange}&time_increment=1&access_token=${access_token}`);
 
