@@ -359,6 +359,29 @@ app.get('/refunds-debug', async (req, res) => {
 // TEMPORARY DEBUG endpoint - inspect total_tax values for a date range.
 // TEMPORARY DEBUG endpoint - inspect line_items + discount_allocations for VAT fallback debugging.
 // TEMPORARY DEBUG endpoint - inspect a single order by ID, both from DB and fresh from Shopify.
+// TEMPORARY DEBUG endpoint - find an order by its visible order number (e.g. 12443 for #12443).
+app.get('/debug-order-by-number/:number', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (!shop || !token) return res.status(401).json({ error: 'Not authenticated' });
+  const number = req.params.number;
+  try {
+    const { body } = await shopifyGet(shop, token, `/admin/api/2024-01/orders.json?name=${encodeURIComponent('#' + number)}&status=any`);
+    let data;
+    try { data = JSON.parse(body); } catch(e) { return res.json({ error: 'parse error', raw: body.slice(0,300) }); }
+    const orders = data.orders || [];
+    if (orders.length === 0) return res.json({ found: false });
+    const o = orders[0];
+    const dbResult = await pool.query('SELECT id, processed_at, total_price, total_tax, line_items, refunds FROM orders WHERE id=$1 AND shop=$2', [o.id, shop]);
+    const dbOrder = dbResult.rows[0] || null;
+    res.json({
+      shopify_id: o.id,
+      shopify: { processed_at: o.processed_at, created_at: o.created_at, total_price: o.total_price, line_items: o.line_items, refunds: o.refunds },
+      db: dbOrder ? { ...dbOrder, line_items: typeof dbOrder.line_items === 'string' ? JSON.parse(dbOrder.line_items) : dbOrder.line_items } : null
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/debug-order/:id', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   const token = tokenStore[shop];
