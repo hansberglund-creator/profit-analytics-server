@@ -459,6 +459,40 @@ app.get('/refunds-debug', async (req, res) => {
 // adjustments to the refund's processing date rather than the order's date.
 // TEMPORARY DEBUG endpoint - list every individual order for a day with its VAT classification
 // and contribution, to find exactly where a day-level sum discrepancy comes from.
+// TEMPORARY DEBUG endpoint - fetch FRESH data directly from Shopify for orders in a date
+// range and compare total_price sums against our database, to catch sync staleness affecting
+// the revenue base itself (not just tax fields).
+app.get('/debug-fresh-vs-db', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (!shop || !token) return res.status(401).json({ error: 'Not authenticated' });
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
+  try {
+    const dbResult = await pool.query(
+      `SELECT id, processed_at, total_price, total_tax, current_total_tax FROM orders
+       WHERE shop=$1 AND processed_at >= $2 AND processed_at < $3
+       ORDER BY processed_at ASC`,
+      [shop, from, to]
+    );
+    let dbSum = 0, freshSum = 0;
+    const diffs = [];
+    for (const row of dbResult.rows) {
+      dbSum += parseFloat(row.total_price) || 0;
+      const { body } = await shopifyGet(shop, token, `/admin/api/2024-01/orders/${row.id}.json?fields=id,total_price,current_total_price,total_tax,current_total_tax,financial_status`);
+      let fresh;
+      try { fresh = JSON.parse(body).order; } catch(e) { fresh = null; }
+      if (fresh) {
+        freshSum += parseFloat(fresh.total_price) || 0;
+        if (parseFloat(fresh.total_price) !== parseFloat(row.total_price) || parseFloat(fresh.current_total_tax) !== parseFloat(row.current_total_tax)) {
+          diffs.push({ id: row.id, db_total_price: row.total_price, fresh_total_price: fresh.total_price, db_current_total_tax: row.current_total_tax, fresh_current_total_tax: fresh.current_total_tax, fresh_financial_status: fresh.financial_status });
+        }
+      }
+    }
+    res.json({ orderCount: dbResult.rows.length, dbSum: dbSum.toFixed(2), freshSum: freshSum.toFixed(2), diffCount: diffs.length, diffs });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/debug-vat-detail', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   if (!shop) return res.status(401).json({ error: 'Not authenticated' });
