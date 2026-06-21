@@ -855,6 +855,28 @@ app.get('/debug-orders-by-status', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// TEMPORARY DEBUG endpoint - test shopifyqlQuery access via GraphQL Admin API, to see if the
+// read_reports scope + protected customer data access actually works for our own store.
+app.get('/debug-shopifyql-test', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (!shop || !token) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const query = `query { shopifyqlQuery(query: "FROM sales_taxes SHOW sales_taxes SINCE -7d") { tableData { columns { name dataType displayName } rows } parseErrors } }`;
+    const result = await new Promise((resolve, reject) => {
+      const body = JSON.stringify({ query });
+      const options = { hostname: shop, path: '/admin/api/2026-04/graphql.json', method: 'POST', headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
+      const r = https.request(options, resp => { let raw=''; resp.on('data',c=>raw+=c); resp.on('end',()=>resolve(raw)); });
+      r.on('error', reject);
+      r.write(body);
+      r.end();
+    });
+    let data;
+    try { data = JSON.parse(result); } catch(e) { return res.json({ error: 'parse error', raw: result.slice(0,500) }); }
+    res.json(data);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/debug-tax-by-status', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   const token = tokenStore[shop];
