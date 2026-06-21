@@ -38,12 +38,16 @@ async function initDB() {
       processed_at TIMESTAMPTZ,
       current_total_price DECIMAL(10,2),
       total_price DECIMAL(10,2),
+      total_tax DECIMAL(10,2),
+      current_total_tax DECIMAL(10,2),
       line_items JSONB,
       refunds JSONB,
       synced_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_orders_shop ON orders(shop);
     CREATE INDEX IF NOT EXISTS idx_orders_processed_at ON orders(processed_at);
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS total_tax DECIMAL(10,2);
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS current_total_tax DECIMAL(10,2);
     CREATE TABLE IF NOT EXISTS sync_status (
       shop VARCHAR(255) PRIMARY KEY,
       last_synced_at TIMESTAMPTZ,
@@ -243,17 +247,20 @@ async function syncAllOrders(shop, token) {
 async function upsertOrders(shop, orders) {
   for (const o of orders) {
     await pool.query(`
-      INSERT INTO orders (id, shop, email, financial_status, created_at, processed_at, current_total_price, total_price, line_items, refunds, synced_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
+      INSERT INTO orders (id, shop, email, financial_status, created_at, processed_at, current_total_price, total_price, total_tax, current_total_tax, line_items, refunds, synced_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
       ON CONFLICT (id) DO UPDATE SET
         financial_status=EXCLUDED.financial_status,
         current_total_price=EXCLUDED.current_total_price,
         total_price=EXCLUDED.total_price,
+        total_tax=EXCLUDED.total_tax,
+        current_total_tax=EXCLUDED.current_total_tax,
         line_items=EXCLUDED.line_items,
         refunds=EXCLUDED.refunds,
         synced_at=NOW()
     `, [o.id, shop, o.email, o.financial_status, o.created_at, o.processed_at||o.created_at,
         parseFloat(o.current_total_price)||0, parseFloat(o.total_price)||0,
+        parseFloat(o.total_tax)||0, parseFloat(o.current_total_tax)||parseFloat(o.total_tax)||0,
         JSON.stringify(o.line_items||[]), JSON.stringify(o.refunds||[])]);
   }
 }
@@ -266,7 +273,7 @@ app.get('/orders', async (req, res) => {
   if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
   try {
     const result = await pool.query(
-      `SELECT id, email, financial_status, created_at, processed_at, current_total_price, total_price, line_items, refunds
+      `SELECT id, email, financial_status, created_at, processed_at, current_total_price, total_price, total_tax, current_total_tax, line_items, refunds
        FROM orders WHERE shop=$1 AND processed_at >= $2 AND processed_at < $3
        ORDER BY processed_at ASC`,
       [shop, from, to]

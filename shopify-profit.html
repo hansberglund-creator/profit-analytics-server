@@ -707,6 +707,15 @@ function getPeriodDates(){
   else{from=new Date(y,m,d-7);}
   return{from,to};
 }
+// Formats a Date using its LOCAL year/month/day components (no UTC conversion).
+// 'to' dates from getPeriodDates() are exclusive (midnight of the day AFTER the period),
+// so callers needing an inclusive end date (like Meta's time_range) should pass toInclusive=true.
+function toLocalDateStr(date,isExclusiveEnd){
+  let d=date;
+  if(isExclusiveEnd){d=new Date(date);d.setDate(d.getDate()-1);}
+  const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
 
 function showTab(tab){
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
@@ -1004,7 +1013,9 @@ async function checkMetaStatus(){
 async function syncMetaSpend(from,to){
   if(!metaConnected)return;
   try{
-    const resp=await fetch(`${PROXY}/meta-spend?from=${from.toISOString()}&to=${to.toISOString()}`);
+    const since=toLocalDateStr(from,false);
+    const until=toLocalDateStr(to,true);
+    const resp=await fetch(`${PROXY}/meta-spend?since=${since}&until=${until}`);
     const data=await resp.json();
     if(data.error){setText('meta-sync-note','Fel: '+data.error);return;}
     metaSpend=parseFloat(data.total)||0;
