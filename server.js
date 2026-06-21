@@ -857,6 +857,39 @@ app.get('/debug-orders-by-status', async (req, res) => {
 
 // TEMPORARY DEBUG endpoint - test shopifyqlQuery access via GraphQL Admin API, to see if the
 // read_reports scope + protected customer data access actually works for our own store.
+// Fetches sales_taxes directly from Shopify's own ShopifyQL reporting engine for a date range,
+// grouped by day. This is the SAME data source Shopify's own "Taxes" report and TrueProfit use,
+// so it correctly includes retroactive tax adjustments (e.g. from editing an old order after
+// Shopify Tax was enabled) attributed to the day they were posted - which a pure orders.json
+// based calculation can never see, since it only knows about each order's own date.
+app.get('/shopify-sales-taxes', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (!shop || !token) return res.status(401).json({ error: 'Not authenticated' });
+  const { since, until } = req.query; // expects YYYY-MM-DD local dates, both inclusive
+  if (!since || !until) return res.status(400).json({ error: 'Missing since/until (YYYY-MM-DD)' });
+  try {
+    const ql = `FROM sales_taxes SHOW sales_taxes GROUP BY day SINCE ${since} UNTIL ${until} ORDER BY day ASC`;
+    const query = `query { shopifyqlQuery(query: ${JSON.stringify(ql)}) { tableData { columns { name dataType displayName } rows } parseErrors } }`;
+    const result = await new Promise((resolve, reject) => {
+      const body = JSON.stringify({ query });
+      const options = { hostname: shop, path: '/admin/api/2026-04/graphql.json', method: 'POST', headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
+      const r = https.request(options, resp => { let raw=''; resp.on('data',c=>raw+=c); resp.on('end',()=>resolve(raw)); });
+      r.on('error', reject);
+      r.write(body);
+      r.end();
+    });
+    let data;
+    try { data = JSON.parse(result); } catch(e) { return res.json({ error: 'parse error', raw: result.slice(0,500) }); }
+    if (data.errors) return res.json({ error: data.errors });
+    const tableData = data.data && data.data.shopifyqlQuery && data.data.shopifyqlQuery.tableData;
+    if (!tableData) return res.json({ error: 'No table data', raw: data });
+    const rows = tableData.rows || [];
+    const total = rows.reduce((s, r) => s + (parseFloat(r.sales_taxes) || 0), 0);
+    res.json({ total: total.toFixed(2), byDay: rows, parseErrors: data.data.shopifyqlQuery.parseErrors });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/debug-shopifyql-test', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   const token = tokenStore[shop];
