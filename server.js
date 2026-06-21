@@ -453,6 +453,67 @@ app.get('/refunds-debug', async (req, res) => {
 // specific days diverge and by how much, plus status breakdown per day.
 // TEMPORARY DEBUG endpoint - VAT per day using the same date-cutoff logic as the frontend,
 // to narrow down which specific day the remaining small discrepancy comes from.
+// TEMPORARY DEBUG endpoint - find refunds PROCESSED within a date range, regardless of the
+// original order's date. Tests the hypothesis that a refund on an order from a different day
+// was processed on the day in question, which could explain a Shopify report attributing tax
+// adjustments to the refund's processing date rather than the order's date.
+// TEMPORARY DEBUG endpoint - list every individual order for a day with its VAT classification
+// and contribution, to find exactly where a day-level sum discrepancy comes from.
+app.get('/debug-vat-detail', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  if (!shop) return res.status(401).json({ error: 'Not authenticated' });
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
+  const SHOPIFY_TAX_CUTOFF = new Date('2026-06-13T15:00:00.000Z');
+  const DEFAULT_VAT = 25;
+  try {
+    const result = await pool.query(
+      `SELECT id, processed_at, total_price, total_tax, current_total_tax FROM orders
+       WHERE shop=$1 AND processed_at >= $2 AND processed_at < $3
+       ORDER BY processed_at ASC`,
+      [shop, from, to]
+    );
+    let sumExact = 0, sumFallback = 0, sumFallbackRevenue = 0;
+    const orders = result.rows.map(r => {
+      const orderDate = new Date(r.processed_at);
+      const hasShopifyTax = orderDate >= SHOPIFY_TAX_CUTOFF;
+      const orderTax = parseFloat(r.current_total_tax !== null && r.current_total_tax !== undefined ? r.current_total_tax : r.total_tax);
+      const price = parseFloat(r.total_price) || 0;
+      let usedTax, method;
+      if (hasShopifyTax && !isNaN(orderTax)) { usedTax = orderTax; method = 'exact'; sumExact += usedTax; }
+      else { usedTax = price * (DEFAULT_VAT / (100 + DEFAULT_VAT)); method = 'fallback'; sumFallback += usedTax; sumFallbackRevenue += price; }
+      return { id: r.id, processed_at: r.processed_at, total_price: r.total_price, total_tax: r.total_tax, current_total_tax: r.current_total_tax, method, usedTax: usedTax.toFixed(2) };
+    });
+    res.json({ count: orders.length, sumExact: sumExact.toFixed(2), sumFallback: sumFallback.toFixed(2), sumFallbackRevenue: sumFallbackRevenue.toFixed(2), grandTotal: (sumExact+sumFallback).toFixed(2), orders });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/debug-refunds-processed-on', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  if (!shop) return res.status(401).json({ error: 'Not authenticated' });
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
+  try {
+    // Scan ALL orders with any refund (not just ones whose processed_at falls in range),
+    // then filter by the refund's own processed_at timestamp.
+    const result = await pool.query(`SELECT id, processed_at, total_price, total_tax, current_total_tax, refunds FROM orders WHERE shop=$1 AND refunds != '[]'::jsonb`, [shop]);
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    const matches = [];
+    result.rows.forEach(row => {
+      const refunds = typeof row.refunds === 'string' ? JSON.parse(row.refunds) : row.refunds;
+      (refunds || []).forEach(r => {
+        const rDate = new Date(r.processed_at);
+        if (rDate >= fromDate && rDate < toDate) {
+          const taxAdjustments = (r.order_adjustments || []).reduce((s, a) => s + (parseFloat(a.tax_amount) || 0), 0);
+          matches.push({ order_id: row.id, order_processed_at: row.processed_at, refund_processed_at: r.processed_at, order_total_tax: row.total_tax, order_current_total_tax: row.current_total_tax, refund_tax_adjustments: taxAdjustments.toFixed(2) });
+        }
+      });
+    });
+    res.json({ count: matches.length, matches });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/debug-vat-by-day', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   if (!shop) return res.status(401).json({ error: 'Not authenticated' });
