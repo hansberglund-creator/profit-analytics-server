@@ -393,7 +393,7 @@ tr:hover td{background:rgba(255,255,255,.018)}
           <div class="section-body">
             <div class="pl-row"><span style="font-weight:600">Total omsättning</span><span id="bd-gross-rev">—</span></div>
             <div class="pl-row indent"><span class="pl-label">↳ Returer</span><span id="bd-refunds">—</span></div>
-            <div class="pl-row indent"><span class="pl-label">↳ Moms</span><span id="bd-vat">—</span></div>
+            <div class="pl-row indent"><span class="pl-label">↳ Moms <span id="vat-badge" style="font-size:10px;color:var(--muted2)"></span></span><span id="bd-vat">—</span></div>
             <div class="pl-row indent"><span class="pl-label">↳ Shopify-avgifter</span><span id="bd-shopify">—</span></div>
             <div class="pl-row indent"><span class="pl-label">↳ COGS</span><span id="bd-cogs">—</span></div>
             <div class="pl-row indent"><span class="pl-label">↳ Frakt / 3PL</span><span id="bd-shipping">—</span></div>
@@ -800,6 +800,9 @@ async function fetchPeriodRefunds(from,to){
 
 async function fetchTransactionFees(from,to){
   try{
+    // Send exact UTC timestamps (same approach as fetchAllOrders, which has always been
+    // correct) instead of local date strings - a timestamp comparison is timezone-safe by
+    // construction, whereas converting to a local date string and back reintroduces risk.
     const resp=await fetch(PROXY+'/transaction-fees?from='+from.toISOString()+'&to='+to.toISOString());
     if(!resp.ok)return{total:0,exact:false};
     const data=await resp.json();
@@ -825,13 +828,20 @@ function recalc(){
   const fixedLogistics=parseFloat(document.getElementById('cost-3pl-fixed')?.value)||0;
   const totalAds=metaAds+googleAds+tiktokAds+snapAds;
   const nOrders=orders.length;
-  let grossRev=0,vatAmt=0,totalCogs=0;
+  let grossRev=0,vatAmt=0,totalCogs=0,vatExactCount=0,vatFallbackCount=0;
   const productStats={},customerStats={};
   orders.forEach(o=>{
     const price=parseFloat(o.total_price)||0;grossRev+=price;
     const email=o.email||String(o.id);
     if(!customerStats[email])customerStats[email]={email,orders:0,revenue:0};
     customerStats[email].orders++;customerStats[email].revenue+=price;
+    // Prefer Shopify's own tax calculation (current_total_tax) - it correctly handles mixed
+    // VAT rates, shipping tax, and discount proration the way Shopify Tax actually computed it
+    // for this specific order. Only fall back to reconstructing VAT from line items when an
+    // order has no tax value stored (e.g. synced before this field was added).
+    const orderTax=parseFloat(o.current_total_tax!==undefined&&o.current_total_tax!==null?o.current_total_tax:o.total_tax);
+    const hasExactTax=!isNaN(orderTax)&&orderTax>0;
+    if(hasExactTax){vatAmt+=orderTax;vatExactCount++;}else{vatFallbackCount++;}
     (o.line_items||[]).forEach(li=>{
       const pid=li.product_id,vid=li.variant_id;
       const cogsKey=vid?'v'+vid:'p'+pid;
@@ -839,7 +849,7 @@ function recalc(){
       totalCogs+=unitCogs*li.quantity;
       const lineRev=parseFloat(li.price)*li.quantity;
       const lineVat=vatMap[pid]!==undefined?vatMap[pid]:defaultVat;
-      vatAmt+=lineRev*(lineVat/(100+lineVat));
+      if(!hasExactTax)vatAmt+=lineRev*(lineVat/(100+lineVat));
       if(!productStats[pid])productStats[pid]={title:li.title,qty:0,revenue:0,cogs:0};
       productStats[pid].qty+=li.quantity;productStats[pid].revenue+=lineRev;productStats[pid].cogs+=unitCogs*li.quantity;
     });
@@ -874,6 +884,7 @@ function recalc(){
   setText('bd-gross-rev',fmt(grossRev));
   if(periodRefunds>0)setRed('bd-refunds','−'+fmt(periodRefunds));else setText('bd-refunds','—');
   setRed('bd-vat','−'+fmt(vatAmt));setRed('bd-shopify','−'+fmt(shopifyFeeAmt));
+  setText('vat-badge',vatFallbackCount===0?'(Shopify Tax)':vatExactCount===0?'(uppskattat)':`(${vatExactCount} exakt, ${vatFallbackCount} uppskattat)`);
   setRed('bd-cogs','−'+fmt(totalCogs));setRed('bd-shipping','−'+fmt(shippingTotal));
   setRed('bd-ads','−'+fmt(totalAds));setRed('bd-custom','−'+fmt(customTotal));
   setRed('bd-txfees','−'+fmt(txFeesAmt));

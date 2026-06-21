@@ -356,6 +356,23 @@ app.get('/refunds-debug', async (req, res) => {
 // everything (paginated) and filter by processed_at ourselves, same pattern as /refunds.
 // TEMPORARY DEBUG endpoint - shows raw balance transaction data for inspection.
 // Remove once the transaction-fees discrepancy is resolved.
+// TEMPORARY DEBUG endpoint - inspect total_tax values for a date range.
+app.get('/debug-orders-tax', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  if (!shop) return res.status(401).json({ error: 'Not authenticated' });
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
+  try {
+    const result = await pool.query(
+      `SELECT id, processed_at, total_price, total_tax, current_total_tax FROM orders
+       WHERE shop=$1 AND processed_at >= $2 AND processed_at < $3
+       ORDER BY processed_at ASC`,
+      [shop, from, to]
+    );
+    res.json({ count: result.rows.length, orders: result.rows });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/debug-balance-tx', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   const token = tokenStore[shop];
