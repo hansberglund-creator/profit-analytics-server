@@ -894,16 +894,23 @@ function recalc(){
     // the authoritative shopify-sales-taxes report (used above as an override) already corrects
     // for this at the aggregate level, so a handful of individual zero-tax refunded orders being
     // re-estimated by the fallback below doesn't affect the final displayed total.
+    // Check if this order's date falls within a user-defined manual VAT period FIRST. If so,
+    // that's an explicit signal from the user that Shopify Tax wasn't reliably active for this
+    // date range - so we always use the fallback rate, even if current_total_tax happens to be
+    // non-zero. A non-zero value here for a pre-activation order is typically just a small
+    // retroactive adjustment fragment (e.g. from editing the order after Shopify Tax went live
+    // on a later date), not the order's true full tax amount - using it as "exact" would
+    // significantly understate the day's total tax, as discovered for orders edited around the
+    // Shopify Tax activation date.
+    const orderDateForPeriodCheck=new Date(o.processed_at||o.created_at);
+    const matchedPeriodFirst=findVatPeriodForDate(orderDateForPeriodCheck);
     const orderTax=parseFloat(o.current_total_tax!==undefined&&o.current_total_tax!==null?o.current_total_tax:o.total_tax);
-    const hasExactTax=!isNaN(orderTax)&&orderTax>0;
+    const hasExactTax=!matchedPeriodFirst&&!isNaN(orderTax)&&orderTax>0;
     if(hasExactTax){
       vatAmt+=orderTax;vatExactCount++;
     }else{
-      // Fallback: look up a user-defined manual VAT period for this order's date; if none
-      // matches, use the general default VAT rate setting.
-      const orderDate=new Date(o.processed_at||o.created_at);
-      const matchedPeriod=findVatPeriodForDate(orderDate);
-      const fallbackRate=matchedPeriod?matchedPeriod.rate:defaultVat;
+      // Fallback: use the matched manual VAT period's rate, or the general default VAT setting.
+      const fallbackRate=matchedPeriodFirst?matchedPeriodFirst.rate:defaultVat;
       // Use currentPrice (current_total_price), not price (total_price) - an order with a
       // voided/refunded portion (e.g. an auto-cancelled post-purchase upsell) has a lower
       // current_total_price, and VAT should be calculated on what was actually kept, not the
