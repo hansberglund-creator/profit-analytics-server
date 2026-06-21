@@ -360,6 +360,44 @@ app.get('/refunds-debug', async (req, res) => {
 // TEMPORARY DEBUG endpoint - inspect line_items + discount_allocations for VAT fallback debugging.
 // TEMPORARY DEBUG endpoint - inspect a single order by ID, both from DB and fresh from Shopify.
 // TEMPORARY DEBUG endpoint - find an order by its visible order number (e.g. 12443 for #12443).
+// TEMPORARY DEBUG endpoint - sum quantity for a specific product_id across a date range,
+// listing every order that contributes, to find where an extra/missing unit comes from.
+app.get('/debug-product-qty', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  if (!shop) return res.status(401).json({ error: 'Not authenticated' });
+  const { from, to, product_id } = req.query;
+  if (!from || !to || !product_id) return res.status(400).json({ error: 'Missing from/to/product_id' });
+  try {
+    const result = await pool.query(
+      `SELECT id, processed_at, financial_status, total_price, line_items, refunds FROM orders
+       WHERE shop=$1 AND processed_at >= $2 AND processed_at < $3
+       ORDER BY processed_at ASC`,
+      [shop, from, to]
+    );
+    let totalQty = 0;
+    let totalRefundedQty = 0;
+    const contributingOrders = [];
+    result.rows.forEach(row => {
+      const items = typeof row.line_items === 'string' ? JSON.parse(row.line_items) : row.line_items;
+      const refunds = typeof row.refunds === 'string' ? JSON.parse(row.refunds) : row.refunds;
+      (items || []).forEach(li => {
+        if (String(li.product_id) === String(product_id)) {
+          totalQty += li.quantity;
+          contributingOrders.push({ order_id: row.id, processed_at: row.processed_at, financial_status: row.financial_status, quantity: li.quantity, variant_id: li.variant_id, variant_title: li.variant_title });
+        }
+      });
+      (refunds || []).forEach(r => {
+        (r.refund_line_items || []).forEach(rli => {
+          if (rli.line_item && String(rli.line_item.product_id) === String(product_id)) {
+            totalRefundedQty += rli.quantity;
+          }
+        });
+      });
+    });
+    res.json({ totalQty, totalRefundedQty, netQty: totalQty - totalRefundedQty, orderCount: contributingOrders.length, contributingOrders });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/debug-order-by-number/:number', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   const token = tokenStore[shop];
