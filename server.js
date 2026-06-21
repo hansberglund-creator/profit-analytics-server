@@ -358,6 +358,27 @@ app.get('/refunds-debug', async (req, res) => {
 // Remove once the transaction-fees discrepancy is resolved.
 // TEMPORARY DEBUG endpoint - inspect total_tax values for a date range.
 // TEMPORARY DEBUG endpoint - inspect line_items + discount_allocations for VAT fallback debugging.
+// TEMPORARY DEBUG endpoint - inspect a single order by ID, both from DB and fresh from Shopify.
+app.get('/debug-order/:id', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (!shop || !token) return res.status(401).json({ error: 'Not authenticated' });
+  const orderId = req.params.id;
+  try {
+    const dbResult = await pool.query('SELECT id, processed_at, created_at, total_price, total_tax, line_items, refunds FROM orders WHERE id=$1 AND shop=$2', [orderId, shop]);
+    const dbOrder = dbResult.rows[0] || null;
+
+    const { body } = await shopifyGet(shop, token, `/admin/api/2024-01/orders/${orderId}.json`);
+    let shopifyOrder;
+    try { shopifyOrder = JSON.parse(body); } catch(e) { shopifyOrder = { error: 'Could not parse', raw: body.slice(0, 500) }; }
+
+    res.json({
+      db: dbOrder ? { ...dbOrder, line_items: typeof dbOrder.line_items === 'string' ? JSON.parse(dbOrder.line_items) : dbOrder.line_items } : null,
+      shopify: shopifyOrder.order ? { id: shopifyOrder.order.id, processed_at: shopifyOrder.order.processed_at, created_at: shopifyOrder.order.created_at, total_price: shopifyOrder.order.total_price, line_items: shopifyOrder.order.line_items, refunds: shopifyOrder.order.refunds } : shopifyOrder
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/debug-line-items', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   if (!shop) return res.status(401).json({ error: 'Not authenticated' });
