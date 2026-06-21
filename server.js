@@ -644,6 +644,47 @@ app.get('/debug-revenue-by-day', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// TEMPORARY DEBUG endpoint - for each order in a date range, fetch its transactions and compare
+// the sum of successful charges against total_price. Finds orders where a post-purchase upsell
+// (e.g. via Kaching/ReConvert) went to partially_paid and auto-voided after ~10 minutes, but
+// total_price on the order was never corrected down to match what was actually paid.
+app.get('/debug-orders-vs-transactions', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (!shop || !token) return res.status(401).json({ error: 'Not authenticated' });
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
+  try {
+    const dbResult = await pool.query(
+      `SELECT id, processed_at, total_price, financial_status FROM orders
+       WHERE shop=$1 AND processed_at >= $2 AND processed_at < $3
+       ORDER BY processed_at ASC`,
+      [shop, from, to]
+    );
+    const diffs = [];
+    for (const row of dbResult.rows) {
+      const { body } = await shopifyGet(shop, token, `/admin/api/2024-01/orders/${row.id}/transactions.json`);
+      let data;
+      try { data = JSON.parse(body); } catch(e) { continue; }
+      const txs = data.transactions || [];
+      // Sum successful sale/capture amounts minus successful refunds, to get net paid amount.
+      let netPaid = 0;
+      txs.forEach(t => {
+        if (t.status !== 'success') return;
+        const amt = parseFloat(t.amount) || 0;
+        if (t.kind === 'sale' || t.kind === 'capture') netPaid += amt;
+        else if (t.kind === 'refund') netPaid -= amt;
+        else if (t.kind === 'void') { /* voided authorization - contributes 0, never captured */ }
+      });
+      const totalPrice = parseFloat(row.total_price) || 0;
+      if (Math.abs(totalPrice - netPaid) > 0.01) {
+        diffs.push({ id: row.id, processed_at: row.processed_at, financial_status: row.financial_status, total_price: totalPrice.toFixed(2), netPaidFromTransactions: netPaid.toFixed(2), diff: (totalPrice - netPaid).toFixed(2), transactions: txs.map(t => ({ kind: t.kind, status: t.status, amount: t.amount })) });
+      }
+    }
+    res.json({ orderCount: dbResult.rows.length, diffCount: diffs.length, diffs });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/debug-order-statuses', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   if (!shop) return res.status(401).json({ error: 'Not authenticated' });
