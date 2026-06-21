@@ -584,6 +584,51 @@ app.get('/debug-line-items', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// TEMPORARY DEBUG endpoint - sum total_tax grouped by financial_status and test-order flag,
+// to find which order(s) Shopify's own sales_taxes report excludes that we might be including.
+app.get('/debug-tax-by-status', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (!shop || !token) return res.status(401).json({ error: 'Not authenticated' });
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
+  try {
+    const result = await pool.query(
+      `SELECT id, processed_at, financial_status, total_price, total_tax, current_total_tax FROM orders
+       WHERE shop=$1 AND processed_at >= $2 AND processed_at < $3
+       ORDER BY processed_at ASC`,
+      [shop, from, to]
+    );
+    let sumOurTax = 0;
+    const byStatus = {};
+    const orders = [];
+    for (const row of result.rows) {
+      const tax = parseFloat(row.current_total_tax !== null && row.current_total_tax !== undefined ? row.current_total_tax : row.total_tax) || 0;
+      sumOurTax += tax;
+      byStatus[row.financial_status] = (byStatus[row.financial_status] || { count: 0, taxSum: 0 });
+      byStatus[row.financial_status].count++;
+      byStatus[row.financial_status].taxSum += tax;
+      orders.push({ id: row.id, processed_at: row.processed_at, financial_status: row.financial_status, total_price: row.total_price, total_tax: row.total_tax, current_total_tax: row.current_total_tax, used_tax: tax });
+    }
+    // Cross-check a sample of orders against live Shopify to see if any are flagged test orders
+    // (test orders are excluded from Shopify's own sales reports but may still be in our DB).
+    let testOrderTaxSum = 0;
+    const testOrders = [];
+    for (const o of orders) {
+      try {
+        const { body } = await shopifyGet(shop, token, `/admin/api/2024-01/orders/${o.id}.json?fields=id,test,total_tax,current_total_tax`);
+        const data = JSON.parse(body);
+        if (data.order && data.order.test) {
+          testOrderTaxSum += o.used_tax;
+          testOrders.push({ id: o.id, used_tax: o.used_tax });
+        }
+      } catch(e) { /* skip on error */ }
+    }
+    Object.keys(byStatus).forEach(k => { byStatus[k].taxSum = byStatus[k].taxSum.toFixed(2); });
+    res.json({ sumOurTax: sumOurTax.toFixed(2), byStatus, testOrderCount: testOrders.length, testOrderTaxSum: testOrderTaxSum.toFixed(2), testOrders, orderCount: orders.length });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/debug-orders-tax', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   if (!shop) return res.status(401).json({ error: 'Not authenticated' });
