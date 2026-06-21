@@ -663,10 +663,13 @@ app.get('/debug-orders-vs-transactions', async (req, res) => {
     );
     const diffs = [];
     for (const row of dbResult.rows) {
+      await new Promise(r => setTimeout(r, 250)); // small delay between calls to avoid rate limiting
       const { body } = await shopifyGet(shop, token, `/admin/api/2024-01/orders/${row.id}/transactions.json`);
       let data;
-      try { data = JSON.parse(body); } catch(e) { continue; }
+      try { data = JSON.parse(body); } catch(e) { diffs.push({ id: row.id, error: 'JSON parse failed', raw: body.slice(0,200) }); continue; }
+      if (data.errors) { diffs.push({ id: row.id, error: 'Shopify API error', detail: data.errors }); continue; }
       const txs = data.transactions || [];
+      if (txs.length === 0) { diffs.push({ id: row.id, error: 'No transactions returned', raw_keys: Object.keys(data) }); continue; }
       // Sum successful sale/capture amounts minus successful refunds, to get net paid amount.
       let netPaid = 0;
       txs.forEach(t => {
@@ -1001,7 +1004,7 @@ app.get('/debug-orders-tax', async (req, res) => {
   if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
   try {
     const result = await pool.query(
-      `SELECT id, processed_at, total_price, total_tax, current_total_tax FROM orders
+      `SELECT id, processed_at, total_price, current_total_price, total_tax, current_total_tax FROM orders
        WHERE shop=$1 AND processed_at >= $2 AND processed_at < $3
        ORDER BY processed_at ASC`,
       [shop, from, to]
