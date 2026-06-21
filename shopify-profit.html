@@ -545,6 +545,11 @@ const PROXY='https://profit-analytics-server-production.up.railway.app';
 const TABS=['dashboard','products','pl','ltv','costs','moms','cogs','settings'];
 let shopUrl='',vatRate=25,shopifyFee=0,txFeeRate=0,currency='SEK';
 let orders=[],products=[],customCosts=[],cogsMap={},vatMap={};
+// Exact moment Shopify Tax was enabled in the store: 13 June 17:00 Stockholm time.
+// Used to distinguish "no tax data because Shopify Tax wasn't active yet" (total_tax=0.00,
+// an absent value) from "Shopify Tax calculated a real zero" (e.g. a fully refunded order
+// after activation) - both produce the same 0.00 field value, so date is the only reliable signal.
+const SHOPIFY_TAX_CUTOFF_UTC=new Date('2026-06-13T15:00:00.000Z');
 let periodRefunds=0;
 let transactionFees=0,transactionFeesExact=false;
 let metaToken='',metaAccountId='',metaConnected=false,metaSpend=0;
@@ -848,8 +853,18 @@ function recalc(){
     // not a missing one. Only fall back to estimation when the field is genuinely absent (NaN),
     // not when it's a real zero. Using `orderTax>0` here would treat a correct zero as "missing"
     // and incorrectly re-estimate tax from total_price (which still reflects the pre-refund amount).
+    // Orders before Shopify Tax was enabled in the store always have total_tax/current_total_tax
+    // = 0.00 in Shopify's data (confirmed by inspecting May orders) - that's an absent value, not
+    // a real zero. Orders after activation that are fully refunded also show current_total_tax=0,
+    // but that IS a real, correct zero. Both cases produce an identical field value, so the only
+    // reliable way to tell them apart is the order's date relative to the activation moment
+    // (activated 13 June, first Shopify Tax order at 17:06 Stockholm time / 15:06 UTC - using
+    // that exact moment as the cutoff, no added margin, since margin in either direction risks
+    // misclassifying orders right at the boundary).
+    const orderDate=new Date(o.processed_at||o.created_at);
+    const hasShopifyTax=orderDate>=SHOPIFY_TAX_CUTOFF_UTC;
     const orderTax=parseFloat(o.current_total_tax!==undefined&&o.current_total_tax!==null?o.current_total_tax:o.total_tax);
-    const hasExactTax=!isNaN(orderTax)&&orderTax>0;
+    const hasExactTax=hasShopifyTax&&!isNaN(orderTax);
     if(hasExactTax){
       vatAmt+=orderTax;vatExactCount++;
     }else{
