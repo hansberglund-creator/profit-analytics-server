@@ -1114,6 +1114,44 @@ app.get('/transaction-fees', async (req, res) => {
 });
 
 
+// Returns every unique product/variant that has ever appeared in a synced order's line_items,
+// regardless of whether it still exists in Shopify today. Deleted variants are NOT available
+// via Shopify's API anymore (Shopify only returns the ID for a deleted variant, nothing else),
+// but our own database already has title/price/sku captured at sync time from each order's
+// line_items, so we can reconstruct the full historical variant list without needing Shopify
+// to still have the variant. This lets COGS be set for products/variants no longer sold.
+app.get('/historical-variants', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  if (!shop) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const result = await pool.query('SELECT line_items FROM orders WHERE shop=$1', [shop]);
+    const variantsMap = {}; // key: 'v'+variant_id or 'p'+product_id (no variant) -> details
+    result.rows.forEach(row => {
+      const items = typeof row.line_items === 'string' ? JSON.parse(row.line_items) : row.line_items;
+      (items || []).forEach(li => {
+        if (!li.product_id) return;
+        const key = li.variant_id ? 'v' + li.variant_id : 'p' + li.product_id;
+        if (!variantsMap[key]) {
+          variantsMap[key] = {
+            key,
+            product_id: li.product_id,
+            variant_id: li.variant_id || null,
+            product_title: li.title,
+            variant_title: li.variant_title || null,
+            sku: li.sku || null,
+            last_price: li.price,
+            order_count: 0
+          };
+        }
+        variantsMap[key].order_count++;
+        // Keep the most recent price seen, as a reasonable default reference (not authoritative).
+        variantsMap[key].last_price = li.price;
+      });
+    });
+    res.json({ variants: Object.values(variantsMap) });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/sync-status', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   if (!shop) return res.status(401).json({ error: 'Not authenticated' });

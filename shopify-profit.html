@@ -561,6 +561,7 @@ let orders=[],products=[],customCosts=[],cogsMap={},vatMap={};
 // Used as fallback for date ranges where Shopify has no real tax data (e.g. before Shopify
 // Tax was enabled). Shopify's own per-order/report data always takes precedence when present.
 let vatPeriods=[];
+let historicalVariants=[];
 let periodRefunds=0;
 let transactionFees=0,transactionFeesExact=false;
 let shopifySalesTaxes=0,shopifySalesTaxesExact=false;
@@ -762,6 +763,7 @@ function initApp(){
   document.getElementById('settings-tx-fee').value=localStorage.getItem('pa_tx_fee')||txFeeRate;
   document.getElementById('settings-currency').value=localStorage.getItem('pa_currency')||currency;
   loadCosts();loadCogs();loadVat();loadVatPeriods();checkMetaStatus();
+  fetchHistoricalVariants().then(v=>{historicalVariants=v;buildCogsTable();});
   document.getElementById('setup-view').style.display='none';
   document.getElementById('app-view').style.display='block';
   document.getElementById('header-right').innerHTML=`<div class="pulse-dot"></div><span style="font-size:11px;color:var(--muted2)">${shopUrl}</span>`;
@@ -850,8 +852,18 @@ async function fetchShopifySalesTaxes(from,to){
   }catch(e){return{total:0,exact:false};}
 }
 async function fetchProducts(){
-  const resp=await shopifyFetch('/admin/api/2024-01/products.json?limit=250&fields=id,title,variants');
+  const resp=await shopifyFetch('/admin/api/2024-01/products.json?limit=250&fields=id,title,variants,images,image');
   if(!resp.ok)return[];return(await resp.json()).products||[];
+}
+// Fetches every product/variant that has ever appeared in a synced order, including ones since
+// deleted in Shopify (Shopify's API can't return details for deleted variants, but our own
+// database already captured title/price/sku from the order's line_items at sync time).
+async function fetchHistoricalVariants(){
+  try{
+    const resp=await fetch(PROXY+'/historical-variants');
+    if(!resp.ok)return[];
+    return(await resp.json()).variants||[];
+  }catch(e){return[];}
 }
 
 function recalc(){
@@ -1088,11 +1100,34 @@ function buildDonut(data){
 function buildCogsTable(){
   const tbl=document.getElementById('cogs-table');if(!tbl)return;
   let rows='';
+  const seenKeys=new Set();
   products.forEach(p=>{
     const variants=p.variants||[];
-    if(variants.length<=1){const key='p'+p.id;rows+=`<tr><td>${p.title}</td><td style="color:var(--muted)">—</td><td><input type="number" placeholder="0" value="${cogsMap[key]||''}" class="ci" style="width:100px" onchange="cogsMap['${key}']=parseFloat(this.value)||0;saveCogs();recalc()"></td></tr>`;}
-    else{rows+=`<tr style="background:rgba(16,25,40,.6)"><td colspan="3" style="font-size:11px;color:var(--muted2);padding:5px 14px">${p.title}</td></tr>`;variants.forEach(v=>{const key='v'+v.id;rows+=`<tr><td style="padding-left:22px;color:var(--muted2)">${v.title}</td><td style="color:var(--muted);font-size:11px">${v.sku||'—'}</td><td><input type="number" placeholder="0" value="${cogsMap[key]||''}" class="ci" style="width:100px" onchange="cogsMap['${key}']=parseFloat(this.value)||0;saveCogs();recalc()"></td></tr>`;});}
+    const imgUrl=(p.image&&p.image.src)||(p.images&&p.images[0]&&p.images[0].src)||'';
+    const imgHtml=imgUrl?`<img src="${imgUrl}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;margin-right:8px;vertical-align:middle">`:'';
+    if(variants.length<=1){
+      const key='p'+p.id;seenKeys.add(key);
+      rows+=`<tr><td>${imgHtml}${p.title}</td><td style="color:var(--muted)">—</td><td><input type="number" placeholder="0" value="${cogsMap[key]||''}" class="ci" style="width:100px" onchange="cogsMap['${key}']=parseFloat(this.value)||0;saveCogs();recalc()"></td></tr>`;
+    }else{
+      rows+=`<tr style="background:rgba(16,25,40,.6)"><td colspan="3" style="font-size:11px;color:var(--muted2);padding:5px 14px">${imgHtml}${p.title}</td></tr>`;
+      variants.forEach(v=>{
+        const key='v'+v.id;seenKeys.add(key);
+        rows+=`<tr><td style="padding-left:22px;color:var(--muted2)">${v.title}</td><td style="color:var(--muted);font-size:11px">${v.sku||'—'}</td><td><input type="number" placeholder="0" value="${cogsMap[key]||''}" class="ci" style="width:100px" onchange="cogsMap['${key}']=parseFloat(this.value)||0;saveCogs();recalc()"></td></tr>`;
+      });
+    }
   });
+  // Historical variants that no longer exist in the current products list (deleted in Shopify).
+  // These can't have an image (Shopify doesn't return any data for deleted variants), but we
+  // still show title/SKU/last known price from past orders so COGS can be set for them.
+  const inactive=historicalVariants.filter(hv=>!seenKeys.has(hv.key));
+  if(inactive.length>0){
+    rows+=`<tr style="background:rgba(16,25,40,.6)"><td colspan="3" style="font-size:11px;color:var(--muted2);padding:5px 14px">Inaktiva / borttagna varianter</td></tr>`;
+    inactive.forEach(hv=>{
+      const key=hv.key;
+      const label=hv.variant_title?`${hv.product_title} — ${hv.variant_title}`:hv.product_title;
+      rows+=`<tr style="opacity:.85"><td><span style="color:var(--muted2);font-size:10px;margin-right:6px" title="Borttagen i Shopify, finns bara i historiska ordrar">●</span>${label}</td><td style="color:var(--muted);font-size:11px">${hv.sku||'—'}</td><td><input type="number" placeholder="0" value="${cogsMap[key]||''}" class="ci" style="width:100px" onchange="cogsMap['${key}']=parseFloat(this.value)||0;saveCogs();recalc()"></td></tr>`;
+    });
+  }
   tbl.innerHTML=rows||'<tr><td colspan="3" style="text-align:center;color:var(--muted2);padding:32px">Anslut butiken</td></tr>';
 }
 function buildVatTable(){
