@@ -904,7 +904,11 @@ function recalc(){
       const orderDate=new Date(o.processed_at||o.created_at);
       const matchedPeriod=findVatPeriodForDate(orderDate);
       const fallbackRate=matchedPeriod?matchedPeriod.rate:defaultVat;
-      vatAmt+=price*(fallbackRate/(100+fallbackRate));
+      // Use currentPrice (current_total_price), not price (total_price) - an order with a
+      // voided/refunded portion (e.g. an auto-cancelled post-purchase upsell) has a lower
+      // current_total_price, and VAT should be calculated on what was actually kept, not the
+      // original pre-void amount.
+      vatAmt+=currentPrice*(fallbackRate/(100+fallbackRate));
       vatFallbackCount++;
     }
     // Build a lookup of refunded quantity per line_item_id for this order, so COGS and
