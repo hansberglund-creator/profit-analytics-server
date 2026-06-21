@@ -451,6 +451,44 @@ app.get('/refunds-debug', async (req, res) => {
 // statuses (voided/pending/refunded) that might explain why a sum differs from another tool.
 // TEMPORARY DEBUG endpoint - per-day revenue breakdown over a date range, to spot which
 // specific days diverge and by how much, plus status breakdown per day.
+// TEMPORARY DEBUG endpoint - VAT per day using the same date-cutoff logic as the frontend,
+// to narrow down which specific day the remaining small discrepancy comes from.
+app.get('/debug-vat-by-day', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  if (!shop) return res.status(401).json({ error: 'Not authenticated' });
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
+  const SHOPIFY_TAX_CUTOFF = new Date('2026-06-13T15:00:00.000Z'); // 13 June 17:00 Stockholm
+  const DEFAULT_VAT = 25;
+  try {
+    const result = await pool.query(
+      `SELECT id, processed_at, total_price, total_tax, current_total_tax FROM orders
+       WHERE shop=$1 AND processed_at >= $2 AND processed_at < $3
+       ORDER BY processed_at ASC`,
+      [shop, from, to]
+    );
+    const byDay = {};
+    result.rows.forEach(r => {
+      const localDate = new Date(new Date(r.processed_at).toLocaleString('en-US', { timeZone: 'Europe/Stockholm' }));
+      const dayKey = `${localDate.getFullYear()}-${String(localDate.getMonth()+1).padStart(2,'0')}-${String(localDate.getDate()).padStart(2,'0')}`;
+      if (!byDay[dayKey]) byDay[dayKey] = { exactCount: 0, fallbackCount: 0, vatSum: 0 };
+      const orderDate = new Date(r.processed_at);
+      const hasShopifyTax = orderDate >= SHOPIFY_TAX_CUTOFF;
+      const orderTax = parseFloat(r.current_total_tax !== null && r.current_total_tax !== undefined ? r.current_total_tax : r.total_tax);
+      const price = parseFloat(r.total_price) || 0;
+      if (hasShopifyTax && !isNaN(orderTax)) {
+        byDay[dayKey].vatSum += orderTax;
+        byDay[dayKey].exactCount++;
+      } else {
+        byDay[dayKey].vatSum += price * (DEFAULT_VAT / (100 + DEFAULT_VAT));
+        byDay[dayKey].fallbackCount++;
+      }
+    });
+    Object.keys(byDay).forEach(k => { byDay[k].vatSum = byDay[k].vatSum.toFixed(2); });
+    res.json({ totalOrders: result.rows.length, byDay });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/debug-revenue-by-day', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   if (!shop) return res.status(401).json({ error: 'Not authenticated' });
