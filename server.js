@@ -65,7 +65,12 @@ async function initDB() {
 }
 
 app.use(cors({ origin: '*' }));
-app.use(express.json());
+// Webhook routes need the raw, unparsed body to verify Shopify's HMAC signature, so we
+// exclude them from the global JSON parser here (they apply their own express.raw() instead).
+app.use((req, res, next) => {
+  if (req.path.startsWith('/webhooks/')) return next();
+  express.json()(req, res, next);
+});
 
 // OAuth
 app.get('/auth', (req, res) => {
@@ -85,8 +90,79 @@ app.get('/auth/callback', async (req, res) => {
     saveTokens();
     // Start initial sync in background
     syncAllOrders(shop, data.access_token);
+    // Register webhooks so order edits/refunds reach us immediately, instead of relying on
+    // the 48h polling window which can miss returns that happen days after purchase (the root
+    // cause behind several stale-data bugs we've hit: refunds, current_total_tax, current_total_price).
+    registerWebhooks(shop, data.access_token);
     res.send(`<html><body style="background:#0f1117;color:#22c55e;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column"><h1>✓ Ansluten!</h1><p style="color:#9ca3b8;margin-top:12px">Synkar ordrar i bakgrunden. Stäng denna flik.</p></body></html>`);
   } catch(e) { res.status(500).send('Error: ' + e.message); }
+});
+
+// Registers the webhooks needed to keep order data fresh in near-real-time: order edits and
+// refunds. Safe to call repeatedly - Shopify won't duplicate a webhook with the same topic+address.
+async function registerWebhooks(shop, token) {
+  const topics = ['orders/updated', 'refunds/create'];
+  for (const topic of topics) {
+    try {
+      const body = JSON.stringify({ webhook: { topic, address: `${BASE_URL}/webhooks/${topic.replace('/', '-')}`, format: 'json' } });
+      const result = await new Promise((resolve, reject) => {
+        const options = { hostname: shop, path: '/admin/api/2024-01/webhooks.json', method: 'POST', headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
+        const r = https.request(options, resp => { let raw=''; resp.on('data',c=>raw+=c); resp.on('end',()=>resolve(raw)); });
+        r.on('error', reject);
+        r.write(body);
+        r.end();
+      });
+      console.log(`Webhook registered for ${topic}:`, result.slice(0, 200));
+    } catch(e) { console.error(`Webhook registration failed for ${topic}:`, e.message); }
+  }
+}
+
+// Verifies a Shopify webhook's HMAC signature against the raw request body, using the app's
+// client secret. Returns true if valid. Without this, anyone who finds our webhook URL could
+// post fake order data and corrupt our database.
+function verifyShopifyWebhook(req) {
+  const hmacHeader = req.get('X-Shopify-Hmac-Sha256');
+  if (!hmacHeader || !req.rawBody) return false;
+  const digest = crypto.createHmac('sha256', CLIENT_SECRET).update(req.rawBody).digest('base64');
+  try { return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(hmacHeader)); }
+  catch(e) { return false; } // length mismatch etc - treat as invalid rather than crashing
+}
+
+// Webhook receiver: orders/updated and refunds/create both trigger a re-sync of just that
+// single order, so changes (refunds, edits) are reflected within seconds instead of up to 48h later.
+app.post('/webhooks/orders-updated', express.raw({ type: '*/*' }), async (req, res) => {
+  req.rawBody = req.body; // express.raw() puts the raw Buffer in req.body
+  if (!verifyShopifyWebhook(req)) { console.error('Webhook orders-updated: invalid HMAC, rejecting'); return res.status(401).send('invalid signature'); }
+  res.status(200).send('ok'); // ack immediately, Shopify expects a fast response within 5s
+  try {
+    const order = JSON.parse(req.rawBody.toString('utf8'));
+    const shop = Object.keys(tokenStore)[0];
+    const token = tokenStore[shop];
+    if (!shop || !token || !order.id) return;
+    await upsertOrders(shop, [order]);
+    console.log('Webhook orders/updated processed for order', order.id);
+  } catch(e) { console.error('Webhook orders/updated error:', e.message); }
+});
+
+app.post('/webhooks/refunds-create', express.raw({ type: '*/*' }), async (req, res) => {
+  req.rawBody = req.body;
+  if (!verifyShopifyWebhook(req)) { console.error('Webhook refunds-create: invalid HMAC, rejecting'); return res.status(401).send('invalid signature'); }
+  res.status(200).send('ok');
+  try {
+    const payload = JSON.parse(req.rawBody.toString('utf8'));
+    const orderId = payload.order_id;
+    const shop = Object.keys(tokenStore)[0];
+    const token = tokenStore[shop];
+    if (!shop || !token || !orderId) return;
+    // The refund webhook payload itself doesn't include the full updated order (current_total_tax
+    // etc), so we re-fetch the order fresh from Shopify to get the post-refund totals.
+    const { body } = await shopifyGet(shop, token, `/admin/api/2024-01/orders/${orderId}.json`);
+    const data = JSON.parse(body);
+    if (data.order) {
+      await upsertOrders(shop, [data.order]);
+      console.log('Webhook refunds/create processed for order', orderId);
+    }
+  } catch(e) { console.error('Webhook refunds/create error:', e.message); }
 });
 
 // Meta OAuth - step 1: redirect to Facebook login
@@ -846,6 +922,16 @@ app.use('/shopify', (req, res) => {
   });
   proxyReq.on('error', e => res.status(500).json({ error: e.message }));
   proxyReq.end();
+});
+
+// Manual trigger for webhook registration - needed for shops that installed the app before
+// webhooks were added to the OAuth flow (registerWebhooks only auto-runs on fresh installs).
+app.post('/register-webhooks', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (!shop || !token) return res.status(401).json({ error: 'Not authenticated' });
+  await registerWebhooks(shop, token);
+  res.json({ ok: true, message: 'Webhook registration attempted - check server logs for results' });
 });
 
 app.get('/health', (req, res) => res.json({ status: 'ok', connectedShops: Object.keys(tokenStore) }));
