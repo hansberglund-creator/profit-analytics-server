@@ -767,11 +767,11 @@ app.get('/debug-order-by-number/:number', async (req, res) => {
     const orders = data.orders || [];
     if (orders.length === 0) return res.json({ found: false });
     const o = orders[0];
-    const dbResult = await pool.query('SELECT id, processed_at, total_price, total_tax, line_items, refunds FROM orders WHERE id=$1 AND shop=$2', [o.id, shop]);
+    const dbResult = await pool.query('SELECT id, processed_at, total_price, current_total_price, total_tax, current_total_tax, line_items, refunds FROM orders WHERE id=$1 AND shop=$2', [o.id, shop]);
     const dbOrder = dbResult.rows[0] || null;
     res.json({
       shopify_id: o.id,
-      shopify: { processed_at: o.processed_at, created_at: o.created_at, total_price: o.total_price, line_items: o.line_items, refunds: o.refunds },
+      shopify: { processed_at: o.processed_at, created_at: o.created_at, total_price: o.total_price, current_total_price: o.current_total_price, total_tax: o.total_tax, current_total_tax: o.current_total_tax, refunds: o.refunds },
       db: dbOrder ? { ...dbOrder, line_items: typeof dbOrder.line_items === 'string' ? JSON.parse(dbOrder.line_items) : dbOrder.line_items } : null
     });
   } catch(e) { res.status(500).json({ error: e.message }); }
