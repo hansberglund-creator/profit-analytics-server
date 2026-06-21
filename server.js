@@ -361,8 +361,11 @@ app.get('/transaction-fees', async (req, res) => {
   const { from, to } = req.query;
   if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
   try {
-    const fromDate = new Date(from);
-    const toDate = new Date(to);
+    // from/to arrive as YYYY-MM-DD local (Stockholm) calendar dates from the frontend.
+    // Convert to the correct UTC timestamps for Stockholm midnight, avoiding the
+    // naive-Date UTC-parsing bug that shifted transactions into the wrong day.
+    const fromDate = stockholmMidnightUTC(from);
+    const toDate = stockholmMidnightUTC(to);
     let total = 0;
     let pageInfo = null;
     let first = true;
@@ -502,6 +505,19 @@ function shopifyGet(hostname, token, path) {
     req.on('error', reject);
     req.end();
   });
+}
+
+// Converts a local Europe/Stockholm calendar date (YYYY-MM-DD) to the UTC timestamp
+// representing midnight in Stockholm on that date. Needed because naive `new Date("YYYY-MM-DD")`
+// is parsed as UTC midnight, not Stockholm midnight - off by 1-2 hours depending on DST,
+// which can shift transactions/orders near day boundaries into the wrong day's totals.
+function stockholmMidnightUTC(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const noon = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  const stockholmStr = noon.toLocaleString('en-US', { timeZone: 'Europe/Stockholm', hour12: false });
+  const stockholmNoon = new Date(stockholmStr);
+  const offsetMs = noon.getTime() - stockholmNoon.getTime();
+  return new Date(Date.UTC(y, m - 1, d, 0, 0, 0) + offsetMs);
 }
 
 function httpsPost(hostname, path, body) {
