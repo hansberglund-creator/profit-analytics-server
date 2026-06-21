@@ -586,6 +586,32 @@ app.get('/debug-line-items', async (req, res) => {
 
 // TEMPORARY DEBUG endpoint - sum total_tax grouped by financial_status and test-order flag,
 // to find which order(s) Shopify's own sales_taxes report excludes that we might be including.
+// TEMPORARY DEBUG endpoint - find orders with a specific financial_status in a date range.
+app.get('/debug-orders-by-status', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (!shop || !token) return res.status(401).json({ error: 'Not authenticated' });
+  const { from, to, status } = req.query;
+  if (!from || !to || !status) return res.status(400).json({ error: 'Missing from/to/status' });
+  try {
+    const result = await pool.query(
+      `SELECT id, processed_at, financial_status, total_price, current_total_price, total_tax, current_total_tax, refunds FROM orders
+       WHERE shop=$1 AND processed_at >= $2 AND processed_at < $3 AND financial_status=$4
+       ORDER BY processed_at ASC`,
+      [shop, from, to, status]
+    );
+    // Also fetch fresh data from Shopify for each matching order to compare.
+    const enriched = [];
+    for (const row of result.rows) {
+      const { body } = await shopifyGet(shop, token, `/admin/api/2024-01/orders/${row.id}.json?fields=id,financial_status,total_price,current_total_price,total_tax,current_total_tax,refunds`);
+      let fresh;
+      try { fresh = JSON.parse(body).order; } catch(e) { fresh = { error: 'parse error' }; }
+      enriched.push({ db: row, shopify_fresh: fresh });
+    }
+    res.json({ count: result.rows.length, orders: enriched });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/debug-tax-by-status', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   const token = tokenStore[shop];
