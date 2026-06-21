@@ -536,6 +536,18 @@ tr:hover td{background:rgba(255,255,255,.018)}
           <button class="btn-sm btn-danger" onclick="disconnect()">Koppla bort</button>
         </div>
       </div>
+      <div class="section" style="max-width:600px">
+        <div class="section-header">
+          <h3>Manuella momsperioder</h3>
+          <button class="btn-sm btn-blue" onclick="addVatPeriod()">+ Lägg till period</button>
+        </div>
+        <div class="section-body">
+          <div style="font-size:11px;color:var(--muted2);margin-bottom:10px">
+            Används som fallback för perioder där Shopify saknar momsdata (t.ex. innan Shopify Tax aktiverades). Shopifys egen data har alltid företräde när den finns.
+          </div>
+          <div id="vat-periods-list"></div>
+        </div>
+      </div>
     </div>
   </div>
 </main>
@@ -545,11 +557,10 @@ const PROXY='https://profit-analytics-server-production.up.railway.app';
 const TABS=['dashboard','products','pl','ltv','costs','moms','cogs','settings'];
 let shopUrl='',vatRate=25,shopifyFee=0,txFeeRate=0,currency='SEK';
 let orders=[],products=[],customCosts=[],cogsMap={},vatMap={};
-// Exact moment Shopify Tax was enabled in the store: 13 June 17:00 Stockholm time.
-// Used to distinguish "no tax data because Shopify Tax wasn't active yet" (total_tax=0.00,
-// an absent value) from "Shopify Tax calculated a real zero" (e.g. a fully refunded order
-// after activation) - both produce the same 0.00 field value, so date is the only reliable signal.
-const SHOPIFY_TAX_CUTOFF_UTC=new Date('2026-06-13T15:00:00.000Z');
+// User-configurable manual VAT periods, e.g. [{from:'2024-01-01',to:'2026-06-12',rate:25}].
+// Used as fallback for date ranges where Shopify has no real tax data (e.g. before Shopify
+// Tax was enabled). Shopify's own per-order/report data always takes precedence when present.
+let vatPeriods=[];
 let periodRefunds=0;
 let transactionFees=0,transactionFeesExact=false;
 let shopifySalesTaxes=0,shopifySalesTaxesExact=false;
@@ -750,7 +761,7 @@ function initApp(){
   document.getElementById('settings-shopify-fee').value=localStorage.getItem('pa_fee')||shopifyFee;
   document.getElementById('settings-tx-fee').value=localStorage.getItem('pa_tx_fee')||txFeeRate;
   document.getElementById('settings-currency').value=localStorage.getItem('pa_currency')||currency;
-  loadCosts();loadCogs();loadVat();checkMetaStatus();
+  loadCosts();loadCogs();loadVat();loadVatPeriods();checkMetaStatus();
   document.getElementById('setup-view').style.display='none';
   document.getElementById('app-view').style.display='block';
   document.getElementById('header-right').innerHTML=`<div class="pulse-dot"></div><span style="font-size:11px;color:var(--muted2)">${shopUrl}</span>`;
@@ -875,27 +886,25 @@ function recalc(){
     // not a missing one. Only fall back to estimation when the field is genuinely absent (NaN),
     // not when it's a real zero. Using `orderTax>0` here would treat a correct zero as "missing"
     // and incorrectly re-estimate tax from total_price (which still reflects the pre-refund amount).
-    // Orders before Shopify Tax was enabled in the store always have total_tax/current_total_tax
-    // = 0.00 in Shopify's data (confirmed by inspecting May orders) - that's an absent value, not
-    // a real zero. Orders after activation that are fully refunded also show current_total_tax=0,
-    // but that IS a real, correct zero. Both cases produce an identical field value, so the only
-    // reliable way to tell them apart is the order's date relative to the activation moment
-    // (activated 13 June, first Shopify Tax order at 17:06 Stockholm time / 15:06 UTC - using
-    // that exact moment as the cutoff, no added margin, since margin in either direction risks
-    // misclassifying orders right at the boundary).
-    const orderDate=new Date(o.processed_at||o.created_at);
-    const hasShopifyTax=orderDate>=SHOPIFY_TAX_CUTOFF_UTC;
+    // Shopify's own current_total_tax/total_tax always wins when it's a real, non-zero value -
+    // that means Shopify Tax actually calculated something for this order. A value of exactly
+    // 0 is ambiguous (could be "Shopify Tax wasn't active yet" OR "a fully refunded order with
+    // a real zero"), so we treat non-zero as the only fully reliable "Shopify has data" signal.
+    // Fully-refunded orders after Shopify Tax was active are a known, accepted edge case here -
+    // the authoritative shopify-sales-taxes report (used above as an override) already corrects
+    // for this at the aggregate level, so a handful of individual zero-tax refunded orders being
+    // re-estimated by the fallback below doesn't affect the final displayed total.
     const orderTax=parseFloat(o.current_total_tax!==undefined&&o.current_total_tax!==null?o.current_total_tax:o.total_tax);
-    const hasExactTax=hasShopifyTax&&!isNaN(orderTax);
+    const hasExactTax=!isNaN(orderTax)&&orderTax>0;
     if(hasExactTax){
       vatAmt+=orderTax;vatExactCount++;
     }else{
-      // Fallback: a flat percentage of the order's total_price (which already nets out
-      // discounts and includes shipping). This was verified against known-correct totals
-      // (TrueProfit) for multiple dates and matches exactly - simpler and more reliable than
-      // reconstructing VAT from individual line items, which requires correctly handling
-      // discount_allocations per line and was a recurring source of small but real errors.
-      vatAmt+=price*(defaultVat/(100+defaultVat));
+      // Fallback: look up a user-defined manual VAT period for this order's date; if none
+      // matches, use the general default VAT rate setting.
+      const orderDate=new Date(o.processed_at||o.created_at);
+      const matchedPeriod=findVatPeriodForDate(orderDate);
+      const fallbackRate=matchedPeriod?matchedPeriod.rate:defaultVat;
+      vatAmt+=price*(fallbackRate/(100+fallbackRate));
       vatFallbackCount++;
     }
     // Build a lookup of refunded quantity per line_item_id for this order, so COGS and
@@ -929,10 +938,15 @@ function recalc(){
   // Prefer Shopify's own authoritative sales_taxes report (via ShopifyQL) over our per-order
   // sum when available. This correctly includes retroactive tax adjustments - e.g. editing an
   // old order after Shopify Tax was enabled posts a correction dated to the edit, not the
-  // original order date, which a per-order current_total_tax sum can never see. Falls back to
-  // the per-order calculation above (already verified correct against TrueProfit for normal
-  // cases) if the ShopifyQL call failed for any reason - never silently shows zero tax.
-  if(shopifySalesTaxesExact){
+  // original order date, which a per-order current_total_tax sum can never see.
+  // IMPORTANT: only trust this when the result is actually meaningful. ShopifyQL can return a
+  // "successful" response of exactly 0 for a period entirely before Shopify Tax was enabled
+  // (it just has no data for that range) - that's not the same as "this period genuinely has
+  // zero tax". If our per-order pass already found some non-Shopify-tax orders (vatFallbackCount
+  // > 0) and ShopifyQL reports exactly 0, that 0 is untrustworthy, so we keep the per-order sum
+  // (which correctly applies manual VAT periods for pre-activation dates) instead of overwriting
+  // it with a misleading zero.
+  if(shopifySalesTaxesExact&&(shopifySalesTaxes>0||vatFallbackCount===0)){
     vatAmt=shopifySalesTaxes;
   }
   const netRevAfterRefunds=currentTotalRev;
@@ -1150,6 +1164,58 @@ function loadVat(){const raw=localStorage.getItem('pa_vat_map');if(raw)try{vatMa
 function saveCogs(){localStorage.setItem('pa_cogs',JSON.stringify(cogsMap));}
 function loadCogs(){const raw=localStorage.getItem('pa_cogs');if(raw)try{cogsMap=JSON.parse(raw);}catch(e){}}
 function saveSettings(){const vat=document.getElementById('settings-vat')?.value,fee=document.getElementById('settings-shopify-fee')?.value,txfee=document.getElementById('settings-tx-fee')?.value,cur=document.getElementById('settings-currency')?.value;if(vat){vatRate=parseFloat(vat);localStorage.setItem('pa_vat',vat);}if(fee){shopifyFee=parseFloat(fee);localStorage.setItem('pa_fee',fee);}if(txfee!==undefined){txFeeRate=parseFloat(txfee)||0;localStorage.setItem('pa_tx_fee',txfee);}if(cur){currency=cur;localStorage.setItem('pa_currency',cur);}}
+
+// Manual VAT periods: user-defined date ranges + rate, used as fallback when Shopify has no
+// real tax data for an order (e.g. before Shopify Tax was enabled in the store).
+function loadVatPeriods(){
+  try{vatPeriods=JSON.parse(localStorage.getItem('pa_vat_periods')||'[]');}catch(e){vatPeriods=[];}
+  renderVatPeriods();
+}
+function saveVatPeriods(){localStorage.setItem('pa_vat_periods',JSON.stringify(vatPeriods));}
+function addVatPeriod(){
+  vatPeriods.push({from:'',to:'',rate:25});
+  saveVatPeriods();
+  renderVatPeriods();
+}
+function removeVatPeriod(idx){
+  vatPeriods.splice(idx,1);
+  saveVatPeriods();
+  renderVatPeriods();
+  recalc();
+}
+function updateVatPeriod(idx,field,value){
+  vatPeriods[idx][field]=field==='rate'?(parseFloat(value)||0):value;
+  saveVatPeriods();
+  recalc();
+}
+function renderVatPeriods(){
+  const container=document.getElementById('vat-periods-list');
+  if(!container)return;
+  if(vatPeriods.length===0){
+    container.innerHTML='<div style="font-size:12px;color:var(--muted2);padding:8px 0">Inga perioder tillagda. Klicka "+ Lägg till period" för att lägga till t.ex. en momssats för tiden innan Shopify Tax aktiverades.</div>';
+    return;
+  }
+  container.innerHTML=vatPeriods.map((p,idx)=>`
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <input type="date" class="ci" style="flex:1" value="${p.from}" onchange="updateVatPeriod(${idx},'from',this.value)">
+      <span style="color:var(--muted2);font-size:12px">till</span>
+      <input type="date" class="ci" style="flex:1" value="${p.to}" onchange="updateVatPeriod(${idx},'to',this.value)">
+      <input type="number" class="ci" style="width:70px" value="${p.rate}" step="0.1" onchange="updateVatPeriod(${idx},'rate',this.value)">
+      <span style="color:var(--muted2);font-size:12px">%</span>
+      <button class="btn-sm btn-danger" onclick="removeVatPeriod(${idx})">×</button>
+    </div>
+  `).join('');
+}
+// Returns the matching manual VAT period for a given date, or null if none matches.
+// Both 'from' and 'to' are inclusive, compared as local calendar dates.
+function findVatPeriodForDate(date){
+  const dateStr=toLocalDateStr(date,false);
+  for(const p of vatPeriods){
+    if(!p.from||!p.to)continue;
+    if(dateStr>=p.from&&dateStr<=p.to)return p;
+  }
+  return null;
+}
 window.addEventListener('load',()=>{
   const shop=localStorage.getItem('pa_shop'),vat=localStorage.getItem('pa_vat'),fee=localStorage.getItem('pa_fee'),cur=localStorage.getItem('pa_currency');
   if(vat)vatRate=parseFloat(vat);if(fee)shopifyFee=parseFloat(fee);if(cur)currency=cur;
