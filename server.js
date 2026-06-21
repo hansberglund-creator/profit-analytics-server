@@ -354,6 +354,47 @@ app.get('/refunds-debug', async (req, res) => {
 // mismatch where a fee could land in a different period than the sale it belongs to.
 // Shopify's own date_min/date_max filters on this endpoint are unreliable, so we fetch
 // everything (paginated) and filter by processed_at ourselves, same pattern as /refunds.
+// TEMPORARY DEBUG endpoint - shows raw balance transaction data for inspection.
+// Remove once the transaction-fees discrepancy is resolved.
+app.get('/debug-balance-tx', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (!shop || !token) return res.status(401).json({ error: 'Not authenticated' });
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
+  try {
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    const matches = [];
+    let pageInfo = null, first = true, pages = 0;
+    while ((first || pageInfo) && pages < 40) {
+      first = false;
+      let path = `/admin/api/2024-01/shopify_payments/balance/transactions.json?limit=250`;
+      if (pageInfo) path += `&page_info=${pageInfo}`;
+      const { body, link } = await shopifyGet(shop, token, path);
+      let data;
+      try { data = JSON.parse(body); } catch(e) { break; }
+      if (data.errors) return res.json({ error: data.errors });
+      const txs = data.transactions || [];
+      if (txs.length === 0) break;
+      let allOlder = true;
+      for (const t of txs) {
+        const pa = new Date(t.processed_at);
+        if (pa >= fromDate && pa < toDate) {
+          matches.push({ id: t.id, type: t.type, amount: t.amount, fee: t.fee, net: t.net, processed_at: t.processed_at, source_order_id: t.source_order_id, currency: t.currency, payout_status: t.payout_status });
+        }
+        if (pa >= fromDate) allOlder = false;
+      }
+      pages++;
+      if (allOlder) break;
+      const nm = link.match(/page_info=([^>&"]+)[^>]*>;\s*rel="next"/);
+      pageInfo = nm ? nm[1] : null;
+    }
+    const feeSum = matches.reduce((s, m) => s + (parseFloat(m.fee) || 0), 0);
+    res.json({ count: matches.length, feeSum: feeSum.toFixed(2), transactions: matches });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/transaction-fees', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   const token = tokenStore[shop];
@@ -361,11 +402,11 @@ app.get('/transaction-fees', async (req, res) => {
   const { from, to } = req.query;
   if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
   try {
-    // from/to arrive as YYYY-MM-DD local (Stockholm) calendar dates from the frontend.
-    // Convert to the correct UTC timestamps for Stockholm midnight, avoiding the
-    // naive-Date UTC-parsing bug that shifted transactions into the wrong day.
-    const fromDate = stockholmMidnightUTC(from);
-    const toDate = stockholmMidnightUTC(to);
+    // from/to are exact UTC timestamps (ISO 8601, same as /orders uses against Postgres
+    // TIMESTAMPTZ). A direct timestamp comparison is timezone-safe by construction - no
+    // local-date conversion needed, since processed_at from Shopify is also an exact instant.
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
     let total = 0;
     let pageInfo = null;
     let first = true;
@@ -505,19 +546,6 @@ function shopifyGet(hostname, token, path) {
     req.on('error', reject);
     req.end();
   });
-}
-
-// Converts a local Europe/Stockholm calendar date (YYYY-MM-DD) to the UTC timestamp
-// representing midnight in Stockholm on that date. Needed because naive `new Date("YYYY-MM-DD")`
-// is parsed as UTC midnight, not Stockholm midnight - off by 1-2 hours depending on DST,
-// which can shift transactions/orders near day boundaries into the wrong day's totals.
-function stockholmMidnightUTC(dateStr) {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const noon = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
-  const stockholmStr = noon.toLocaleString('en-US', { timeZone: 'Europe/Stockholm', hour12: false });
-  const stockholmNoon = new Date(stockholmStr);
-  const offsetMs = noon.getTime() - stockholmNoon.getTime();
-  return new Date(Date.UTC(y, m - 1, d, 0, 0, 0) + offsetMs);
 }
 
 function httpsPost(hostname, path, body) {
