@@ -322,6 +322,13 @@ async function syncAllOrders(shop, token) {
 
 async function upsertOrders(shop, orders) {
   for (const o of orders) {
+    // IMPORTANT: don't use `parseFloat(x) || fallback` here - 0 is a legitimate, correct value
+    // (e.g. a fully refunded order has current_total_tax=0), but 0 is falsy in JS, so `||` would
+    // silently replace it with the fallback. This caused fully-refunded orders to keep their
+    // stale pre-refund tax value forever, even after a full re-sync. Check for null/undefined
+    // explicitly instead.
+    const totalTax = o.total_tax !== null && o.total_tax !== undefined ? parseFloat(o.total_tax) : 0;
+    const currentTotalTax = o.current_total_tax !== null && o.current_total_tax !== undefined ? parseFloat(o.current_total_tax) : totalTax;
     await pool.query(`
       INSERT INTO orders (id, shop, email, financial_status, created_at, processed_at, current_total_price, total_price, total_tax, current_total_tax, line_items, refunds, synced_at)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
@@ -336,7 +343,7 @@ async function upsertOrders(shop, orders) {
         synced_at=NOW()
     `, [o.id, shop, o.email, o.financial_status, o.created_at, o.processed_at||o.created_at,
         parseFloat(o.current_total_price)||0, parseFloat(o.total_price)||0,
-        parseFloat(o.total_tax)||0, parseFloat(o.current_total_tax)||parseFloat(o.total_tax)||0,
+        totalTax, currentTotalTax,
         JSON.stringify(o.line_items||[]), JSON.stringify(o.refunds||[])]);
   }
 }
