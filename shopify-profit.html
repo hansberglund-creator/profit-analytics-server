@@ -751,19 +751,19 @@ async function connectShopify(){
     const resp=await fetch(PROXY+'/health');if(!resp.ok)throw new Error('Servern svarade med '+resp.status);
     const data=await resp.json();
     if(!data.connectedShops.includes(url)){showSetupError('Öppna länken för att ansluta: '+PROXY+'/auth?shop='+url);btn.disabled=false;btn.textContent='Anslut butik';return;}
-    shopUrl=url;localStorage.setItem('pa_shop',shopUrl);initApp();await loadData();
+    shopUrl=url;localStorage.setItem('pa_shop',shopUrl);await initApp();await loadData();
   }catch(e){showSetupError('Fel: '+e.message);btn.disabled=false;btn.textContent='Anslut butik';}
 }
 function showSetupError(msg){const el=document.getElementById('setup-error');el.textContent=msg;el.style.display='block';}
 
-function initApp(){
+async function initApp(){
   document.getElementById('settings-shop').value=shopUrl;
   document.getElementById('settings-vat').value=localStorage.getItem('pa_vat')||vatRate;
   document.getElementById('settings-shopify-fee').value=localStorage.getItem('pa_fee')||shopifyFee;
   document.getElementById('settings-tx-fee').value=localStorage.getItem('pa_tx_fee')||txFeeRate;
   document.getElementById('settings-currency').value=localStorage.getItem('pa_currency')||currency;
   loadCosts();loadCogs();loadVat();loadVatPeriods();checkMetaStatus();
-  fetchHistoricalVariants().then(v=>{historicalVariants=v;buildCogsTable();});
+  historicalVariants=await fetchHistoricalVariants();
   document.getElementById('setup-view').style.display='none';
   document.getElementById('app-view').style.display='block';
   document.getElementById('header-right').innerHTML=`<div class="pulse-dot"></div><span style="font-size:11px;color:var(--muted2)">${shopUrl}</span>`;
@@ -1262,11 +1262,11 @@ function findVatPeriodForDate(date){
   }
   return null;
 }
-window.addEventListener('load',()=>{
+window.addEventListener('load',async()=>{
   const shop=localStorage.getItem('pa_shop'),vat=localStorage.getItem('pa_vat'),fee=localStorage.getItem('pa_fee'),cur=localStorage.getItem('pa_currency');
   if(vat)vatRate=parseFloat(vat);if(fee)shopifyFee=parseFloat(fee);if(cur)currency=cur;
   const txfee=localStorage.getItem('pa_tx_fee');if(txfee)txFeeRate=parseFloat(txfee);
-  if(shop){shopUrl=shop;initApp();loadData();}
+  if(shop){shopUrl=shop;await initApp();loadData();}
 });
 </script>
 </body>
