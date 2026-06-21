@@ -837,29 +837,42 @@ function recalc(){
     customerStats[email].orders++;customerStats[email].revenue+=price;
     // Prefer Shopify's own tax calculation (current_total_tax) - it correctly handles mixed
     // VAT rates, shipping tax, and discount proration the way Shopify Tax actually computed it
-    // for this specific order. Only fall back to reconstructing VAT from line items when an
-    // order has no tax value stored (e.g. synced before this field was added).
+    // for this specific order. Only fall back to reconstructing VAT when an order has no tax
+    // value stored (e.g. orders from before Shopify Tax was enabled in the store).
     const orderTax=parseFloat(o.current_total_tax!==undefined&&o.current_total_tax!==null?o.current_total_tax:o.total_tax);
     const hasExactTax=!isNaN(orderTax)&&orderTax>0;
-    if(hasExactTax){vatAmt+=orderTax;vatExactCount++;}else{vatFallbackCount++;}
+    if(hasExactTax){
+      vatAmt+=orderTax;vatExactCount++;
+    }else{
+      // Fallback: a flat percentage of the order's total_price (which already nets out
+      // discounts and includes shipping). This was verified against known-correct totals
+      // (TrueProfit) for multiple dates and matches exactly - simpler and more reliable than
+      // reconstructing VAT from individual line items, which requires correctly handling
+      // discount_allocations per line and was a recurring source of small but real errors.
+      vatAmt+=price*(defaultVat/(100+defaultVat));
+      vatFallbackCount++;
+    }
+    // Build a lookup of refunded quantity per line_item_id for this order, so COGS and
+    // product stats reflect units actually kept by the customer, not gross units ordered.
+    // Without this, a returned unit still counted as a cost (and as "sold"), which is what
+    // caused totals to come out higher than Shopify's own net-of-returns figures.
+    const refundedQtyByLineItem={};
+    (o.refunds||[]).forEach(r=>{
+      (r.refund_line_items||[]).forEach(rli=>{
+        const liId=rli.line_item_id;
+        refundedQtyByLineItem[liId]=(refundedQtyByLineItem[liId]||0)+(rli.quantity||0);
+      });
+    });
     (o.line_items||[]).forEach(li=>{
       const pid=li.product_id,vid=li.variant_id;
       const cogsKey=vid?'v'+vid:'p'+pid;
       const unitCogs=cogsMap[cogsKey]!==undefined?cogsMap[cogsKey]:(cogsMap['p'+pid]||0);
-      totalCogs+=unitCogs*li.quantity;
-      const lineRev=parseFloat(li.price)*li.quantity;
-      // For the VAT fallback only (orders with no Shopify Tax data), subtract line-level
-      // discounts (discount_allocations) before computing VAT. li.price is the pre-discount
-      // unit price, so without this the VAT base ends up larger than the order's actual
-      // total_price whenever a discount code was used - which is what caused fallback VAT
-      // to come out too high. productStats keeps using the undiscounted lineRev, since that's
-      // a separate, intentional choice for product-level revenue display.
-      const lineDiscount=(li.discount_allocations||[]).reduce((s,da)=>s+(parseFloat(da.amount)||0),0);
-      const lineRevForVat=lineRev-lineDiscount;
-      const lineVat=vatMap[pid]!==undefined?vatMap[pid]:defaultVat;
-      if(!hasExactTax)vatAmt+=lineRevForVat*(lineVat/(100+lineVat));
+      const refundedQty=refundedQtyByLineItem[li.id]||0;
+      const netQty=Math.max(0,li.quantity-refundedQty);
+      totalCogs+=unitCogs*netQty;
+      const lineRev=parseFloat(li.price)*netQty;
       if(!productStats[pid])productStats[pid]={title:li.title,qty:0,revenue:0,cogs:0};
-      productStats[pid].qty+=li.quantity;productStats[pid].revenue+=lineRev;productStats[pid].cogs+=unitCogs*li.quantity;
+      productStats[pid].qty+=netQty;productStats[pid].revenue+=lineRev;productStats[pid].cogs+=unitCogs*netQty;
     });
   });
   const netRevAfterRefunds=grossRev-periodRefunds;
