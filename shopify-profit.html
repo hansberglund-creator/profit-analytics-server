@@ -552,6 +552,7 @@ let orders=[],products=[],customCosts=[],cogsMap={},vatMap={};
 const SHOPIFY_TAX_CUTOFF_UTC=new Date('2026-06-13T15:00:00.000Z');
 let periodRefunds=0;
 let transactionFees=0,transactionFeesExact=false;
+let shopifySalesTaxes=0,shopifySalesTaxesExact=false;
 let metaToken='',metaAccountId='',metaConnected=false,metaSpend=0;
 let currentPeriod='7d';
 
@@ -776,6 +777,9 @@ async function loadData(){
     const txFeesResult=await fetchTransactionFees(from,to);
     transactionFees=txFeesResult.total;
     transactionFeesExact=txFeesResult.exact;
+    const salesTaxesResult=await fetchShopifySalesTaxes(from,to);
+    shopifySalesTaxes=salesTaxesResult.total;
+    shopifySalesTaxesExact=salesTaxesResult.exact;
     await checkMetaStatus();
     if(metaConnected)await syncMetaSpend(from,to);
     buildCogsTable();buildVatTable();recalc();
@@ -814,6 +818,24 @@ async function fetchTransactionFees(from,to){
     // total===0 with no error could mean "no payouts yet in this period" rather than "fees are zero"
     // we still treat it as exact since the payouts endpoint responded successfully
     return{total:data.total||0,exact:!data.error};
+  }catch(e){return{total:0,exact:false};}
+}
+
+// Fetches sales_taxes directly from Shopify's own ShopifyQL reporting engine. This is the
+// authoritative source - it correctly includes retroactive tax adjustments (e.g. from editing
+// an old order after Shopify Tax was enabled), attributed to the day they were actually posted,
+// which a per-order current_total_tax sum can never capture. 'since'/'until' are sent as plain
+// local YYYY-MM-DD strings since the backend does no further date arithmetic on them - no UTC
+// conversion risk here, unlike the order-timestamp endpoints.
+async function fetchShopifySalesTaxes(from,to){
+  try{
+    const since=toLocalDateStr(from,false);
+    const until=toLocalDateStr(to,true); // 'to' from getPeriodDates is exclusive (next day midnight); ShopifyQL UNTIL is inclusive
+    const resp=await fetch(PROXY+'/shopify-sales-taxes?since='+since+'&until='+until);
+    if(!resp.ok)return{total:0,exact:false};
+    const data=await resp.json();
+    if(data.error||data.total===undefined)return{total:0,exact:false};
+    return{total:parseFloat(data.total)||0,exact:true};
   }catch(e){return{total:0,exact:false};}
 }
 async function fetchProducts(){
@@ -904,6 +926,15 @@ function recalc(){
   // (or mismatched) returns in some periods, causing revenue to drift from Shopify's/TrueProfit's
   // figures whenever an order had a partial refund. periodRefunds is still shown as an
   // informational breakdown line, but no longer drives this calculation.
+  // Prefer Shopify's own authoritative sales_taxes report (via ShopifyQL) over our per-order
+  // sum when available. This correctly includes retroactive tax adjustments - e.g. editing an
+  // old order after Shopify Tax was enabled posts a correction dated to the edit, not the
+  // original order date, which a per-order current_total_tax sum can never see. Falls back to
+  // the per-order calculation above (already verified correct against TrueProfit for normal
+  // cases) if the ShopifyQL call failed for any reason - never silently shows zero tax.
+  if(shopifySalesTaxesExact){
+    vatAmt=shopifySalesTaxes;
+  }
   const netRevAfterRefunds=currentTotalRev;
   const netRev=netRevAfterRefunds-vatAmt;
   const shopifyFeeAmt=netRev*(shopFee/100);
@@ -941,7 +972,7 @@ function recalc(){
   setText('bd-gross-rev',fmt(grossRev));
   if(actualRefundsGap>0)setRed('bd-refunds','−'+fmt(actualRefundsGap));else setText('bd-refunds','—');
   setRed('bd-vat','−'+fmt(vatAmt));setRed('bd-shopify','−'+fmt(shopifyFeeAmt));
-  setText('vat-badge',vatFallbackCount===0?'(Shopify Tax)':vatExactCount===0?'(uppskattat)':`(${vatExactCount} exakt, ${vatFallbackCount} uppskattat)`);
+  setText('vat-badge',shopifySalesTaxesExact?'(Shopify rapport)':vatFallbackCount===0?'(Shopify Tax)':vatExactCount===0?'(uppskattat)':`(${vatExactCount} exakt, ${vatFallbackCount} uppskattat)`);
   setRed('bd-cogs','−'+fmt(totalCogs));setRed('bd-shipping','−'+fmt(shippingTotal));
   setRed('bd-ads','−'+fmt(totalAds));setRed('bd-custom','−'+fmt(customTotal));
   setRed('bd-txfees','−'+fmt(txFeesAmt));
