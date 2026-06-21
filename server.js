@@ -357,6 +357,37 @@ app.get('/refunds-debug', async (req, res) => {
 // TEMPORARY DEBUG endpoint - shows raw balance transaction data for inspection.
 // Remove once the transaction-fees discrepancy is resolved.
 // TEMPORARY DEBUG endpoint - inspect total_tax values for a date range.
+// TEMPORARY DEBUG endpoint - inspect line_items + discount_allocations for VAT fallback debugging.
+app.get('/debug-line-items', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  if (!shop) return res.status(401).json({ error: 'Not authenticated' });
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
+  try {
+    const result = await pool.query(
+      `SELECT id, total_price, total_tax, line_items FROM orders
+       WHERE shop=$1 AND processed_at >= $2 AND processed_at < $3
+       ORDER BY processed_at ASC`,
+      [shop, from, to]
+    );
+    let sumLinePrice = 0, sumDiscount = 0, sumTotalPrice = 0;
+    const orders = result.rows.map(row => {
+      const items = typeof row.line_items === 'string' ? JSON.parse(row.line_items) : row.line_items;
+      const lines = (items || []).map(li => {
+        const lineGross = parseFloat(li.price) * li.quantity;
+        const discAlloc = (li.discount_allocations || []).reduce((s, da) => s + (parseFloat(da.amount) || 0), 0);
+        const totalDiscField = parseFloat(li.total_discount) || 0;
+        sumLinePrice += lineGross;
+        sumDiscount += discAlloc;
+        return { title: li.title, price: li.price, quantity: li.quantity, lineGross, discount_allocations: li.discount_allocations, discAllocSum: discAlloc, total_discount_field: totalDiscField };
+      });
+      sumTotalPrice += parseFloat(row.total_price) || 0;
+      return { id: row.id, total_price: row.total_price, total_tax: row.total_tax, lines };
+    });
+    res.json({ count: orders.length, sumLinePrice: sumLinePrice.toFixed(2), sumDiscount: sumDiscount.toFixed(2), sumTotalPrice: sumTotalPrice.toFixed(2), lineMinusDiscount: (sumLinePrice - sumDiscount).toFixed(2), orders });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/debug-orders-tax', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   if (!shop) return res.status(401).json({ error: 'Not authenticated' });

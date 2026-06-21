@@ -848,8 +848,16 @@ function recalc(){
       const unitCogs=cogsMap[cogsKey]!==undefined?cogsMap[cogsKey]:(cogsMap['p'+pid]||0);
       totalCogs+=unitCogs*li.quantity;
       const lineRev=parseFloat(li.price)*li.quantity;
+      // For the VAT fallback only (orders with no Shopify Tax data), subtract line-level
+      // discounts (discount_allocations) before computing VAT. li.price is the pre-discount
+      // unit price, so without this the VAT base ends up larger than the order's actual
+      // total_price whenever a discount code was used - which is what caused fallback VAT
+      // to come out too high. productStats keeps using the undiscounted lineRev, since that's
+      // a separate, intentional choice for product-level revenue display.
+      const lineDiscount=(li.discount_allocations||[]).reduce((s,da)=>s+(parseFloat(da.amount)||0),0);
+      const lineRevForVat=lineRev-lineDiscount;
       const lineVat=vatMap[pid]!==undefined?vatMap[pid]:defaultVat;
-      if(!hasExactTax)vatAmt+=lineRev*(lineVat/(100+lineVat));
+      if(!hasExactTax)vatAmt+=lineRevForVat*(lineVat/(100+lineVat));
       if(!productStats[pid])productStats[pid]={title:li.title,qty:0,revenue:0,cogs:0};
       productStats[pid].qty+=li.quantity;productStats[pid].revenue+=lineRev;productStats[pid].cogs+=unitCogs*li.quantity;
     });
