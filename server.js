@@ -462,6 +462,33 @@ app.get('/refunds-debug', async (req, res) => {
 // TEMPORARY DEBUG endpoint - fetch FRESH data directly from Shopify for orders in a date
 // range and compare total_price sums against our database, to catch sync staleness affecting
 // the revenue base itself (not just tax fields).
+// TEMPORARY DEBUG endpoint - look up a list of order NUMBERS (e.g. 12397,12389,...) and show
+// their tax-related fields, for easy comparison against a list the user already has.
+app.get('/debug-orders-by-numbers', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (!shop || !token) return res.status(401).json({ error: 'Not authenticated' });
+  const { numbers } = req.query;
+  if (!numbers) return res.status(400).json({ error: 'Missing numbers (comma-separated)' });
+  const numberList = numbers.split(',').map(n => n.trim()).filter(Boolean);
+  try {
+    const results = [];
+    let sumTotalPrice = 0, sumTax = 0;
+    for (const num of numberList) {
+      const { body } = await shopifyGet(shop, token, `/admin/api/2024-01/orders.json?name=${encodeURIComponent('#' + num)}&status=any`);
+      let data;
+      try { data = JSON.parse(body); } catch(e) { continue; }
+      const order = (data.orders || [])[0];
+      if (!order) { results.push({ number: num, found: false }); continue; }
+      const tax = parseFloat(order.current_total_tax !== undefined && order.current_total_tax !== null ? order.current_total_tax : order.total_tax) || 0;
+      sumTotalPrice += parseFloat(order.total_price) || 0;
+      sumTax += tax;
+      results.push({ number: num, found: true, id: order.id, processed_at: order.processed_at, total_price: order.total_price, total_tax: order.total_tax, current_total_tax: order.current_total_tax, financial_status: order.financial_status });
+    }
+    res.json({ count: results.length, sumTotalPrice: sumTotalPrice.toFixed(2), sumTax: sumTax.toFixed(2), expectedVatAt25pct: (sumTotalPrice*(25/125)).toFixed(2), orders: results });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/debug-fresh-vs-db', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   const token = tokenStore[shop];
