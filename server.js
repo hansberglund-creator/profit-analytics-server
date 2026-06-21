@@ -362,6 +362,59 @@ app.get('/refunds-debug', async (req, res) => {
 // TEMPORARY DEBUG endpoint - find an order by its visible order number (e.g. 12443 for #12443).
 // TEMPORARY DEBUG endpoint - sum quantity for a specific product_id across a date range,
 // listing every order that contributes, to find where an extra/missing unit comes from.
+// TEMPORARY DEBUG endpoint - compare every order in a date range between our DB and
+// live Shopify data, to find which specific order(s) have drifted out of sync.
+app.get('/debug-compare-orders', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (!shop || !token) return res.status(401).json({ error: 'Not authenticated' });
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
+  try {
+    const dbResult = await pool.query(
+      `SELECT id, processed_at, total_price, total_tax, current_total_tax, financial_status FROM orders
+       WHERE shop=$1 AND processed_at >= $2 AND processed_at < $3
+       ORDER BY processed_at ASC`,
+      [shop, from, to]
+    );
+    const dbOrders = {};
+    dbResult.rows.forEach(r => { dbOrders[r.id] = r; });
+
+    // Fetch the same window fresh from Shopify using created_at_min/max (status=any to include all)
+    const dateMin = new Date(from).toISOString();
+    const dateMax = new Date(to).toISOString();
+    let sinceId = null, first = true;
+    const shopifyOrders = {};
+    while (first || sinceId) {
+      first = false;
+      let path = `/admin/api/2024-01/orders.json?status=any&limit=250&order=id+asc&processed_at_min=${dateMin}&processed_at_max=${dateMax}`;
+      if (sinceId) path += `&since_id=${sinceId}`;
+      const { body } = await shopifyGet(shop, token, path);
+      let data;
+      try { data = JSON.parse(body); } catch(e) { break; }
+      const orders = data.orders || [];
+      if (orders.length === 0) break;
+      orders.forEach(o => { shopifyOrders[o.id] = o; });
+      if (orders.length < 250) break;
+      sinceId = orders[orders.length - 1].id;
+    }
+
+    const allIds = new Set([...Object.keys(dbOrders), ...Object.keys(shopifyOrders).map(String)]);
+    const diffs = [];
+    allIds.forEach(id => {
+      const db = dbOrders[id];
+      const sf = shopifyOrders[id];
+      if (!db) { diffs.push({ id, issue: 'missing_in_db', shopify_total_price: sf?.total_price, shopify_processed_at: sf?.processed_at }); return; }
+      if (!sf) { diffs.push({ id, issue: 'missing_in_shopify_for_this_window', db_total_price: db.total_price, db_processed_at: db.processed_at }); return; }
+      if (parseFloat(db.total_price) !== parseFloat(sf.total_price)) {
+        diffs.push({ id, issue: 'total_price_mismatch', db_total_price: db.total_price, shopify_total_price: sf.total_price, db_processed_at: db.processed_at, shopify_processed_at: sf.processed_at, financial_status: sf.financial_status });
+      }
+    });
+
+    res.json({ dbCount: dbResult.rows.length, shopifyCount: Object.keys(shopifyOrders).length, diffCount: diffs.length, diffs });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/debug-product-qty', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   if (!shop) return res.status(401).json({ error: 'Not authenticated' });
