@@ -1238,12 +1238,6 @@ app.post('/register-webhooks', async (req, res) => {
   res.json({ ok: true, message: 'Webhook registration attempted - check server logs for results' });
 });
 
-// Serves the app's frontend directly, so it can be opened via a real https:// URL instead of
-// a local file:// path (which blocks API calls to this server due to browser security rules).
-app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/shopify-profit.html');
-});
-
 app.get('/health', (req, res) => res.json({ status: 'ok', connectedShops: Object.keys(tokenStore) }));
 
 function shopifyGet(hostname, token, path) {
