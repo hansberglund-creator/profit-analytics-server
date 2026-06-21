@@ -828,10 +828,15 @@ function recalc(){
   const fixedLogistics=parseFloat(document.getElementById('cost-3pl-fixed')?.value)||0;
   const totalAds=metaAds+googleAds+tiktokAds+snapAds;
   const nOrders=orders.length;
-  let grossRev=0,vatAmt=0,totalCogs=0,vatExactCount=0,vatFallbackCount=0;
+  let grossRev=0,currentTotalRev=0,vatAmt=0,totalCogs=0,vatExactCount=0,vatFallbackCount=0;
   const productStats={},customerStats={};
   orders.forEach(o=>{
     const price=parseFloat(o.total_price)||0;grossRev+=price;
+    // current_total_price is Shopify's own post-return total for the order - this is what
+    // TrueProfit's revenue figure matches exactly. total_price stays as the true gross
+    // (pre-return) figure for the separate "Gross revenue" display line.
+    const currentPrice=parseFloat(o.current_total_price!==undefined&&o.current_total_price!==null?o.current_total_price:o.total_price)||0;
+    currentTotalRev+=currentPrice;
     const email=o.email||String(o.id);
     if(!customerStats[email])customerStats[email]={email,orders:0,revenue:0};
     customerStats[email].orders++;customerStats[email].revenue+=price;
@@ -839,6 +844,10 @@ function recalc(){
     // VAT rates, shipping tax, and discount proration the way Shopify Tax actually computed it
     // for this specific order. Only fall back to reconstructing VAT when an order has no tax
     // value stored (e.g. orders from before Shopify Tax was enabled in the store).
+    // A fully-refunded order legitimately has orderTax=0 from Shopify - that's an exact value,
+    // not a missing one. Only fall back to estimation when the field is genuinely absent (NaN),
+    // not when it's a real zero. Using `orderTax>0` here would treat a correct zero as "missing"
+    // and incorrectly re-estimate tax from total_price (which still reflects the pre-refund amount).
     const orderTax=parseFloat(o.current_total_tax!==undefined&&o.current_total_tax!==null?o.current_total_tax:o.total_tax);
     const hasExactTax=!isNaN(orderTax)&&orderTax>0;
     if(hasExactTax){
@@ -875,9 +884,19 @@ function recalc(){
       productStats[pid].qty+=netQty;productStats[pid].revenue+=lineRev;productStats[pid].cogs+=unitCogs*netQty;
     });
   });
-  const netRevAfterRefunds=grossRev-periodRefunds;
+  // Use Shopify's own current_total_price sum as the post-return revenue figure, rather than
+  // gross minus our separately-fetched periodRefunds. The separate refund fetch double-counted
+  // (or mismatched) returns in some periods, causing revenue to drift from Shopify's/TrueProfit's
+  // figures whenever an order had a partial refund. periodRefunds is still shown as an
+  // informational breakdown line, but no longer drives this calculation.
+  const netRevAfterRefunds=currentTotalRev;
   const netRev=netRevAfterRefunds-vatAmt;
   const shopifyFeeAmt=netRev*(shopFee/100);
+  // Show the actual gross-to-net gap (grossRev - currentTotalRev) as "Returer", so the
+  // visual breakdown (Gross - Returer - Moms = Nettointäkt) is mathematically consistent.
+  // This also naturally captures order edits/discounts applied after the fact, not just
+  // formal refunds, which is why it's more reliable than the separately-fetched periodRefunds.
+  const actualRefundsGap=Math.max(0,grossRev-currentTotalRev);
   // Use exact transaction fees from Shopify Payments payouts when available, otherwise fall back to the estimated rate
   const txFeesAmt=transactionFeesExact?transactionFees:netRevAfterRefunds*(txFeeRateVal/100);
   const shippingTotal=shippingPerOrder*nOrders+fixedLogistics;
@@ -890,7 +909,9 @@ function recalc(){
   const roas=totalAds>0?netRev/totalAds:0;
   const grossMargin=netRev>0?grossProfit/netRev*100:0;
   const netMargin=netRev>0?netProfit/netRev*100:0;
-  const totalCosts=periodRefunds+vatAmt+totalCogs+opex;
+  // periodRefunds is no longer added here - returns are already reflected in the lower
+  // netRevAfterRefunds (via current_total_price), so adding it again would double-count them.
+  const totalCosts=vatAmt+totalCogs+opex;
 
   const heroEl=document.getElementById('hero-net');
   if(heroEl){heroEl.textContent=fmt(netProfit);heroEl.style.color='var(--text)';}
@@ -903,7 +924,7 @@ function recalc(){
   const nmEl=document.getElementById('m-net-margin');if(nmEl){nmEl.textContent=fmtPct(netMargin);nmEl.className='metric-value white';}
   setText('m-gross-margin',fmtPct(grossMargin));
   setText('bd-gross-rev',fmt(grossRev));
-  if(periodRefunds>0)setRed('bd-refunds','−'+fmt(periodRefunds));else setText('bd-refunds','—');
+  if(actualRefundsGap>0)setRed('bd-refunds','−'+fmt(actualRefundsGap));else setText('bd-refunds','—');
   setRed('bd-vat','−'+fmt(vatAmt));setRed('bd-shopify','−'+fmt(shopifyFeeAmt));
   setText('vat-badge',vatFallbackCount===0?'(Shopify Tax)':vatExactCount===0?'(uppskattat)':`(${vatExactCount} exakt, ${vatFallbackCount} uppskattat)`);
   setRed('bd-cogs','−'+fmt(totalCogs));setRed('bd-shipping','−'+fmt(shippingTotal));
@@ -911,7 +932,11 @@ function recalc(){
   setRed('bd-txfees','−'+fmt(txFeesAmt));
   setText('txfees-badge',transactionFeesExact?'(exakt)':'(uppskattat)');
   const bn=document.getElementById('bd-net');if(bn){bn.textContent=fmt(netProfit);bn.style.color=netProfit>=0?'var(--text)':'var(--red)';bn.className='';}
-  setText('pl-gross-rev',fmt(grossRev));setRed('pl-refunds','−'+fmt(periodRefunds));setRed('pl-vat','−'+fmt(vatAmt));setText('pl-net-rev',fmt(netRev));
+  // Show the actual gross-to-net gap (grossRev - currentTotalRev) as "Returer", so the
+  // visual breakdown (Gross - Returer - Moms = Nettointäkt) is mathematically consistent.
+  // This also naturally captures order edits/discounts applied after the fact, not just
+  // formal refunds, which is why it's more reliable than the separately-fetched periodRefunds.
+  setText('pl-gross-rev',fmt(grossRev));setRed('pl-refunds','−'+fmt(actualRefundsGap));setRed('pl-vat','−'+fmt(vatAmt));setText('pl-net-rev',fmt(netRev));
   setRed('pl-cogs','−'+fmt(totalCogs));
   const gp=document.getElementById('pl-gross-profit');if(gp){gp.textContent=fmt(grossProfit);gp.style.color=grossProfit>=0?'var(--text)':'var(--red)';gp.className='';}
   setRed('pl-shipping','−'+fmt(shippingTotal));setRed('pl-ads','−'+fmt(totalAds));setRed('pl-shopify','−'+fmt(shopifyFeeAmt));setRed('pl-custom','−'+fmt(customTotal));setRed('pl-txfees','−'+fmt(txFeesAmt));
@@ -930,7 +955,7 @@ function recalc(){
   const lt=document.getElementById('ltv-table');
   if(lt)lt.innerHTML=custArr.slice(0,20).map(c=>`<tr><td>${c.email||'Okänd'}</td><td>${c.orders}</td><td>${fmt(c.revenue)}</td><td>${fmt(c.revenue/c.orders)}</td></tr>`).join('');
   buildDailyChart(orders);
-  buildDonut({cogs:totalCogs,shipping:shippingTotal,ads:totalAds,vat:vatAmt,custom:customTotal,shopify:shopifyFeeAmt,txfees:txFeesAmt,refunds:periodRefunds});
+  buildDonut({cogs:totalCogs,shipping:shippingTotal,ads:totalAds,vat:vatAmt,custom:customTotal,shopify:shopifyFeeAmt,txfees:txFeesAmt,refunds:actualRefundsGap});
 }
 
 function buildDailyChart(ords){
