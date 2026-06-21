@@ -364,6 +364,67 @@ app.get('/refunds-debug', async (req, res) => {
 // listing every order that contributes, to find where an extra/missing unit comes from.
 // TEMPORARY DEBUG endpoint - compare every order in a date range between our DB and
 // live Shopify data, to find which specific order(s) have drifted out of sync.
+// TEMPORARY DEBUG endpoint - list every order in a range with financial_status, to spot
+// statuses (voided/pending/refunded) that might explain why a sum differs from another tool.
+// TEMPORARY DEBUG endpoint - per-day revenue breakdown over a date range, to spot which
+// specific days diverge and by how much, plus status breakdown per day.
+app.get('/debug-revenue-by-day', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  if (!shop) return res.status(401).json({ error: 'Not authenticated' });
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
+  try {
+    const result = await pool.query(
+      `SELECT id, processed_at, financial_status, total_price, current_total_price FROM orders
+       WHERE shop=$1 AND processed_at >= $2 AND processed_at < $3
+       ORDER BY processed_at ASC`,
+      [shop, from, to]
+    );
+    // Group by Stockholm-local calendar day
+    const byDay = {};
+    result.rows.forEach(r => {
+      const localDate = new Date(r.processed_at).toLocaleString('en-US', { timeZone: 'Europe/Stockholm' });
+      const d = new Date(localDate);
+      const dayKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      if (!byDay[dayKey]) byDay[dayKey] = { count: 0, sumTotalPrice: 0, sumCurrentTotalPrice: 0, statuses: {}, orderIds: [] };
+      byDay[dayKey].count++;
+      byDay[dayKey].sumTotalPrice += parseFloat(r.total_price) || 0;
+      byDay[dayKey].sumCurrentTotalPrice += parseFloat(r.current_total_price) || 0;
+      byDay[dayKey].statuses[r.financial_status] = (byDay[dayKey].statuses[r.financial_status] || 0) + 1;
+      byDay[dayKey].orderIds.push(r.id);
+    });
+    Object.keys(byDay).forEach(k => {
+      byDay[k].sumTotalPrice = byDay[k].sumTotalPrice.toFixed(2);
+      byDay[k].sumCurrentTotalPrice = byDay[k].sumCurrentTotalPrice.toFixed(2);
+    });
+    res.json({ totalOrders: result.rows.length, byDay });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/debug-order-statuses', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  if (!shop) return res.status(401).json({ error: 'Not authenticated' });
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
+  try {
+    const result = await pool.query(
+      `SELECT id, processed_at, financial_status, total_price, current_total_price FROM orders
+       WHERE shop=$1 AND processed_at >= $2 AND processed_at < $3
+       ORDER BY processed_at ASC`,
+      [shop, from, to]
+    );
+    const sumTotalPrice = result.rows.reduce((s, r) => s + (parseFloat(r.total_price) || 0), 0);
+    const sumCurrentTotalPrice = result.rows.reduce((s, r) => s + (parseFloat(r.current_total_price) || 0), 0);
+    const byStatus = {};
+    result.rows.forEach(r => {
+      byStatus[r.financial_status] = (byStatus[r.financial_status] || { count: 0, sum: 0 });
+      byStatus[r.financial_status].count++;
+      byStatus[r.financial_status].sum += parseFloat(r.total_price) || 0;
+    });
+    res.json({ count: result.rows.length, sumTotalPrice: sumTotalPrice.toFixed(2), sumCurrentTotalPrice: sumCurrentTotalPrice.toFixed(2), byStatus, orders: result.rows });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/debug-compare-orders', async (req, res) => {
   const shop = Object.keys(tokenStore)[0];
   const token = tokenStore[shop];
