@@ -1,4 +1,3 @@
-console.log('=== DEPLOY-CHECK-VERSION-7 ===');
 const express = require('express');
 const cors = require('cors');
 const https = require('https');
@@ -10,16 +9,6 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const CLIENT_ID = process.env.SHOPIFY_CLIENT_ID || '32e267c453b2a6fa1ae82f355d413b8e';
 const CLIENT_SECRET = process.env.SHOPIFY_CLIENT_SECRET || '';
-// TEMPORARY DEBUG - check CLIENT_SECRET for stray whitespace/quotes without logging the value itself.
-console.log('CLIENT_SECRET debug:', JSON.stringify({
-  length: CLIENT_SECRET.length,
-  hasLeadingWhitespace: /^\s/.test(CLIENT_SECRET),
-  hasTrailingWhitespace: /\s$/.test(CLIENT_SECRET),
-  hasQuotes: CLIENT_SECRET.includes('"') || CLIENT_SECRET.includes("'"),
-  hasNewline: CLIENT_SECRET.includes('\n') || CLIENT_SECRET.includes('\r'),
-  firstChar: CLIENT_SECRET.charCodeAt(0),
-  lastChar: CLIENT_SECRET.charCodeAt(CLIENT_SECRET.length - 1)
-}));
 const BASE_URL = process.env.BASE_URL || 'https://profit-analytics-server-production.up.railway.app';
 const SCOPES = 'read_orders,read_products,read_all_orders,read_shopify_payments_payouts';
 const TOKEN_FILE = '/tmp/tokens.json';
@@ -33,7 +22,27 @@ const META_SCOPES = 'ads_read';
 // Load tokens
 let tokenStore = {};
 try { tokenStore = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8')); } catch(e) {}
-function saveTokens() { try { fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokenStore)); } catch(e) {} }
+function saveTokens() {
+  try { fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokenStore)); } catch(e) {}
+  // Persist to Postgres too - /tmp doesn't survive a Railway redeploy, so without this every
+  // deploy lost the token and forced a needless full resync via /auth.
+  Object.entries(tokenStore).forEach(([shop, access_token]) => {
+    pool.query(
+      `INSERT INTO shopify_tokens (shop, access_token, updated_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (shop) DO UPDATE SET access_token = EXCLUDED.access_token, updated_at = NOW()`,
+      [shop, access_token]
+    ).catch(e => console.error('saveTokens DB persist failed:', e.message));
+  });
+}
+// Loads any previously saved tokens from Postgres into tokenStore at startup, so a redeploy
+// (which wipes /tmp) doesn't force a fresh /auth + full resync.
+async function loadTokensFromDB() {
+  try {
+    const result = await pool.query('SELECT shop, access_token FROM shopify_tokens');
+    result.rows.forEach(row => { tokenStore[row.shop] = row.access_token; });
+    if (result.rows.length > 0) console.log(`Loaded ${result.rows.length} Shopify token(s) from database`);
+  } catch(e) { console.error('loadTokensFromDB failed:', e.message); }
+}
 
 // Database
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
@@ -71,6 +80,11 @@ async function initDB() {
       ad_account_name VARCHAR(255),
       token_expires_at TIMESTAMPTZ,
       connected_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS shopify_tokens (
+      shop VARCHAR(255) PRIMARY KEY,
+      access_token TEXT NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
 }
@@ -135,25 +149,6 @@ function verifyShopifyWebhook(req) {
   const hmacHeader = req.get('X-Shopify-Hmac-Sha256');
   if (!hmacHeader || !req.rawBody) return false;
   const digest = crypto.createHmac('sha256', CLIENT_SECRET).update(req.rawBody).digest('base64');
-  // TEMPORARY DEBUG - also try the shop-level Notification webhook signing secret shown in
-  // Settings > Notifications, to test whether Shopify signs API-created webhooks with that
-  // secret instead of the app's client secret.
-  const SHOP_WEBHOOK_SECRET = 'b42545f525446f51d4b203b838d21d6a4380495a4194c768c79dc52b3ac5d574';
-  const altDigest = crypto.createHmac('sha256', SHOP_WEBHOOK_SECRET).update(req.rawBody).digest('base64');
-  if (digest !== hmacHeader) {
-    console.log('HMAC mismatch debug:', JSON.stringify({
-      computedDigest: digest,
-      receivedHeader: hmacHeader,
-      rawBodyLength: req.rawBody.length,
-      clientSecretLength: CLIENT_SECRET.length
-    }));
-    // ONE-TIME TEMPORARY DEBUG - full base64 raw body, to independently recompute HMAC offline
-    // and pinpoint exactly where the byte sequence diverges from what Shopify signed.
-    // REMOVE IMMEDIATELY after this is resolved.
-    console.log('FULL_RAWBODY_B64_START');
-    console.log(req.rawBody.toString('base64'));
-    console.log('FULL_RAWBODY_B64_END');
-  }
   try { return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(hmacHeader)); }
   catch(e) { return false; } // length mismatch etc - treat as invalid rather than crashing
 }
@@ -1367,6 +1362,6 @@ function httpsGetJson(hostname, path) {
   });
 }
 
-initDB().then(() => {
+initDB().then(loadTokensFromDB).then(() => {
   app.listen(PORT, () => console.log(`Server on port ${PORT}`));
 }).catch(e => console.error('DB init failed:', e));
