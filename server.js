@@ -9,6 +9,16 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const CLIENT_ID = process.env.SHOPIFY_CLIENT_ID || '32e267c453b2a6fa1ae82f355d413b8e';
 const CLIENT_SECRET = process.env.SHOPIFY_CLIENT_SECRET || '';
+// TEMPORARY DEBUG - check CLIENT_SECRET for stray whitespace/quotes without logging the value itself.
+console.log('CLIENT_SECRET debug:', JSON.stringify({
+  length: CLIENT_SECRET.length,
+  hasLeadingWhitespace: /^\s/.test(CLIENT_SECRET),
+  hasTrailingWhitespace: /\s$/.test(CLIENT_SECRET),
+  hasQuotes: CLIENT_SECRET.includes('"') || CLIENT_SECRET.includes("'"),
+  hasNewline: CLIENT_SECRET.includes('\n') || CLIENT_SECRET.includes('\r'),
+  firstChar: CLIENT_SECRET.charCodeAt(0),
+  lastChar: CLIENT_SECRET.charCodeAt(CLIENT_SECRET.length - 1)
+}));
 const BASE_URL = process.env.BASE_URL || 'https://profit-analytics-server-production.up.railway.app';
 const SCOPES = 'read_orders,read_products,read_all_orders,read_shopify_payments_payouts';
 const TOKEN_FILE = '/tmp/tokens.json';
