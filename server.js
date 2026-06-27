@@ -135,11 +135,16 @@ function verifyShopifyWebhook(req) {
   const hmacHeader = req.get('X-Shopify-Hmac-Sha256');
   if (!hmacHeader || !req.rawBody) return false;
   const digest = crypto.createHmac('sha256', CLIENT_SECRET).update(req.rawBody).digest('base64');
-  // TEMPORARY DEBUG - log digest mismatch details to diagnose the "invalid HMAC" issue.
-  // Remove once resolved. Does not log the secret itself, only derived hash values and lengths.
+  // TEMPORARY DEBUG - also try the shop-level Notification webhook signing secret shown in
+  // Settings > Notifications, to test whether Shopify signs API-created webhooks with that
+  // secret instead of the app's client secret.
+  const SHOP_WEBHOOK_SECRET = 'b42545f525446f51d4b203b838d21d6a4380495a4194c768c79dc52b3ac5d574';
+  const altDigest = crypto.createHmac('sha256', SHOP_WEBHOOK_SECRET).update(req.rawBody).digest('base64');
   if (digest !== hmacHeader) {
     console.log('HMAC mismatch debug:', JSON.stringify({
       computedDigest: digest,
+      altDigestShopSecret: altDigest,
+      altMatches: altDigest === hmacHeader,
       receivedHeader: hmacHeader,
       rawBodyLength: req.rawBody.length,
       rawBodyIsBuffer: Buffer.isBuffer(req.rawBody),
