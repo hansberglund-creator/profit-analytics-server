@@ -98,10 +98,10 @@ app.get('/auth/callback', async (req, res) => {
   } catch(e) { res.status(500).send('Error: ' + e.message); }
 });
 
-// Registers the webhooks needed to keep order data fresh in near-real-time: order edits and
-// refunds. Safe to call repeatedly - Shopify won't duplicate a webhook with the same topic+address.
+// Registers the webhooks needed to keep order data fresh in near-real-time: new orders,
+// order edits, and refunds. Safe to call repeatedly - Shopify won't duplicate a webhook with the same topic+address.
 async function registerWebhooks(shop, token) {
-  const topics = ['orders/updated', 'refunds/create'];
+  const topics = ['orders/create', 'orders/updated', 'refunds/create'];
   for (const topic of topics) {
     try {
       const body = JSON.stringify({ webhook: { topic, address: `${BASE_URL}/webhooks/${topic.replace('/', '-')}`, format: 'json' } });
@@ -128,8 +128,23 @@ function verifyShopifyWebhook(req) {
   catch(e) { return false; } // length mismatch etc - treat as invalid rather than crashing
 }
 
-// Webhook receiver: orders/updated and refunds/create both trigger a re-sync of just that
-// single order, so changes (refunds, edits) are reflected within seconds instead of up to 48h later.
+// Webhook receiver: orders/create, orders/updated and refunds/create all trigger a re-sync of
+// just that single order, so new orders and changes (refunds, edits) are reflected within
+// seconds instead of waiting for the 30-min delta sync.
+app.post('/webhooks/orders-create', express.raw({ type: '*/*' }), async (req, res) => {
+  req.rawBody = req.body; // express.raw() puts the raw Buffer in req.body
+  if (!verifyShopifyWebhook(req)) { console.error('Webhook orders-create: invalid HMAC, rejecting'); return res.status(401).send('invalid signature'); }
+  res.status(200).send('ok'); // ack immediately, Shopify expects a fast response within 5s
+  try {
+    const order = JSON.parse(req.rawBody.toString('utf8'));
+    const shop = Object.keys(tokenStore)[0];
+    const token = tokenStore[shop];
+    if (!shop || !token || !order.id) return;
+    await upsertOrders(shop, [order]);
+    console.log('Webhook orders/create processed for order', order.id);
+  } catch(e) { console.error('Webhook orders/create error:', e.message); }
+});
+
 app.post('/webhooks/orders-updated', express.raw({ type: '*/*' }), async (req, res) => {
   req.rawBody = req.body; // express.raw() puts the raw Buffer in req.body
   if (!verifyShopifyWebhook(req)) { console.error('Webhook orders-updated: invalid HMAC, rejecting'); return res.status(401).send('invalid signature'); }
