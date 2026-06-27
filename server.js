@@ -1278,6 +1278,47 @@ app.post('/register-webhooks', async (req, res) => {
 
 app.get('/health', (req, res) => res.json({ status: 'ok', connectedShops: Object.keys(tokenStore) }));
 
+// TEMPORARY DEBUG endpoint - list all currently registered webhook subscriptions on Shopify's
+// side, so we can see exactly what's registered (address, topic, id) when diagnosing HMAC
+// mismatches that persist despite a confirmed-correct, clean CLIENT_SECRET.
+app.get('/debug-list-webhooks', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (!shop || !token) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const { body } = await shopifyGet(shop, token, '/admin/api/2024-01/webhooks.json?limit=250');
+    const data = JSON.parse(body);
+    res.json(data);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// TEMPORARY DEBUG endpoint - delete ALL registered webhook subscriptions for this shop, then
+// caller should hit /register-webhooks again to recreate them fresh. Used to rule out stale
+// webhook subscriptions that may have been signed/registered against a previous secret.
+app.post('/debug-delete-all-webhooks', async (req, res) => {
+  const shop = Object.keys(tokenStore)[0];
+  const token = tokenStore[shop];
+  if (!shop || !token) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const { body } = await shopifyGet(shop, token, '/admin/api/2024-01/webhooks.json?limit=250');
+    const data = JSON.parse(body);
+    const webhooks = data.webhooks || [];
+    const results = [];
+    for (const wh of webhooks) {
+      try {
+        await new Promise((resolve, reject) => {
+          const options = { hostname: shop, path: `/admin/api/2024-01/webhooks/${wh.id}.json`, method: 'DELETE', headers: { 'X-Shopify-Access-Token': token } };
+          const r = https.request(options, resp => { let raw=''; resp.on('data',c=>raw+=c); resp.on('end',()=>resolve(raw)); });
+          r.on('error', reject);
+          r.end();
+        });
+        results.push({ id: wh.id, topic: wh.topic, address: wh.address, deleted: true });
+      } catch(e) { results.push({ id: wh.id, topic: wh.topic, deleted: false, error: e.message }); }
+    }
+    res.json({ deletedCount: results.filter(r => r.deleted).length, results });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 function shopifyGet(hostname, token, path) {
   return new Promise((resolve, reject) => {
     const options = { hostname, path, method: 'GET', headers: { 'X-Shopify-Access-Token': token } };
