@@ -143,19 +143,16 @@ function verifyShopifyWebhook(req) {
   if (digest !== hmacHeader) {
     console.log('HMAC mismatch debug:', JSON.stringify({
       computedDigest: digest,
-      altDigestShopSecret: altDigest,
-      altMatches: altDigest === hmacHeader,
       receivedHeader: hmacHeader,
       rawBodyLength: req.rawBody.length,
-      rawBodyIsBuffer: Buffer.isBuffer(req.rawBody),
-      rawBodyFirst20Hex: req.rawBody.slice(0, 20).toString('hex'),
-      rawBodyLast20Hex: req.rawBody.slice(-20).toString('hex'),
-      rawBodyFirst20Utf8: req.rawBody.slice(0, 20).toString('utf8'),
-      rawBodyLast20Utf8: req.rawBody.slice(-20).toString('utf8'),
-      allHeaders: req.headers,
-      clientSecretLength: CLIENT_SECRET.length,
-      contentType: req.get('Content-Type')
+      clientSecretLength: CLIENT_SECRET.length
     }));
+    // ONE-TIME TEMPORARY DEBUG - full base64 raw body, to independently recompute HMAC offline
+    // and pinpoint exactly where the byte sequence diverges from what Shopify signed.
+    // REMOVE IMMEDIATELY after this is resolved.
+    console.log('FULL_RAWBODY_B64_START');
+    console.log(req.rawBody.toString('base64'));
+    console.log('FULL_RAWBODY_B64_END');
   }
   try { return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(hmacHeader)); }
   catch(e) { return false; } // length mismatch etc - treat as invalid rather than crashing
