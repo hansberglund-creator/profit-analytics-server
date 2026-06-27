@@ -9,6 +9,12 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const CLIENT_ID = process.env.SHOPIFY_CLIENT_ID || '32e267c453b2a6fa1ae82f355d413b8e';
 const CLIENT_SECRET = process.env.SHOPIFY_CLIENT_SECRET || '';
+// Shopify can take a while to settle on one secret after a client secret rotation, and in
+// practice has been signing webhooks with EITHER the old or the new secret unpredictably during
+// that window. SHOPIFY_CLIENT_SECRET_OLD is a second accepted secret so verification doesn't
+// depend on guessing which one Shopify used for a given delivery. Safe to leave set even after
+// things stabilize; remove it later once deliveries are consistently signed with one secret.
+const CLIENT_SECRET_OLD = process.env.SHOPIFY_CLIENT_SECRET_OLD || '';
 const BASE_URL = process.env.BASE_URL || 'https://profit-analytics-server-production.up.railway.app';
 const SCOPES = 'read_orders,read_products,read_all_orders,read_shopify_payments_payouts';
 const TOKEN_FILE = '/tmp/tokens.json';
@@ -142,15 +148,28 @@ async function registerWebhooks(shop, token) {
   }
 }
 
-// Verifies a Shopify webhook's HMAC signature against the raw request body, using the app's
-// client secret. Returns true if valid. Without this, anyone who finds our webhook URL could
-// post fake order data and corrupt our database.
+// Verifies a Shopify webhook's HMAC signature against the app's client secret. Returns true if
+// valid. Without this, anyone who finds our webhook URL could post fake order data and corrupt
+// our database. Checks CLIENT_SECRET first, then CLIENT_SECRET_OLD (if set) as a fallback, since
+// Shopify can sign deliveries with either secret during a rotation window.
 function verifyShopifyWebhook(req) {
   const hmacHeader = req.get('X-Shopify-Hmac-Sha256');
   if (!hmacHeader || !req.rawBody) return false;
+  const hmacBuf = Buffer.from(hmacHeader);
+
   const digest = crypto.createHmac('sha256', CLIENT_SECRET).update(req.rawBody).digest('base64');
-  try { return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(hmacHeader)); }
-  catch(e) { return false; } // length mismatch etc - treat as invalid rather than crashing
+  try {
+    if (crypto.timingSafeEqual(Buffer.from(digest), hmacBuf)) return true;
+  } catch(e) { /* length mismatch - fall through to try the old secret */ }
+
+  if (CLIENT_SECRET_OLD) {
+    const digestOld = crypto.createHmac('sha256', CLIENT_SECRET_OLD).update(req.rawBody).digest('base64');
+    try {
+      if (crypto.timingSafeEqual(Buffer.from(digestOld), hmacBuf)) return true;
+    } catch(e) { /* length mismatch - neither secret matches */ }
+  }
+
+  return false;
 }
 
 // Webhook receiver: orders/create, orders/updated and refunds/create all trigger a re-sync of
@@ -321,15 +340,26 @@ app.get('/meta-spend', async (req, res) => {
 
     // since/until are already plain YYYY-MM-DD strings in the shop's local calendar days,
     // exactly as Meta's time_range expects (both inclusive) - no timezone conversion needed here.
+    // limit=500 keeps a full month (max 31 daily rows) well within one page, but we still follow
+    // paging.next defensively - Graph API insights responses are paginated, and without following
+    // it, a long enough period would silently drop trailing days from the total (the exact bug
+    // that caused this endpoint to under-report spend for full-month periods).
     const timeRange = encodeURIComponent(JSON.stringify({ since, until }));
-    const insights = await httpsGetJson('graph.facebook.com', `/v19.0/${ad_account_id}/insights?fields=spend&time_range=${timeRange}&time_increment=1&access_token=${access_token}`);
-
-    if (insights.error) {
-      return res.json({ total: 0, connected: true, error: insights.error.message });
+    let path = `/v19.0/${ad_account_id}/insights?fields=spend&time_range=${timeRange}&time_increment=1&limit=500&access_token=${access_token}`;
+    let allDays = [];
+    let pages = 0;
+    while (path && pages < 20) {
+      const insights = await httpsGetJson('graph.facebook.com', path);
+      if (insights.error) {
+        return res.json({ total: 0, connected: true, error: insights.error.message });
+      }
+      allDays = allDays.concat(insights.data || []);
+      const next = insights.paging && insights.paging.next;
+      path = next ? next.replace('https://graph.facebook.com', '') : null;
+      pages++;
     }
-    const days = insights.data || [];
-    const total = days.reduce((sum, d) => sum + (parseFloat(d.spend) || 0), 0);
-    res.json({ total, connected: true, days });
+    const total = allDays.reduce((sum, d) => sum + (parseFloat(d.spend) || 0), 0);
+    res.json({ total, connected: true, days: allDays });
   } catch(e) { res.json({ total: 0, error: e.message }); }
 });
 
