@@ -148,6 +148,11 @@ function verifyShopifyWebhook(req) {
       receivedHeader: hmacHeader,
       rawBodyLength: req.rawBody.length,
       rawBodyIsBuffer: Buffer.isBuffer(req.rawBody),
+      rawBodyFirst20Hex: req.rawBody.slice(0, 20).toString('hex'),
+      rawBodyLast20Hex: req.rawBody.slice(-20).toString('hex'),
+      rawBodyFirst20Utf8: req.rawBody.slice(0, 20).toString('utf8'),
+      rawBodyLast20Utf8: req.rawBody.slice(-20).toString('utf8'),
+      allHeaders: req.headers,
       clientSecretLength: CLIENT_SECRET.length,
       contentType: req.get('Content-Type')
     }));
