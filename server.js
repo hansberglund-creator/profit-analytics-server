@@ -1,3 +1,4 @@
+console.log('=== DEPLOY-CHECK-VERSION-7 ===');
 const express = require('express');
 const cors = require('cors');
 const https = require('https');
