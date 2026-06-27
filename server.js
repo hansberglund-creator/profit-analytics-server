@@ -124,6 +124,18 @@ function verifyShopifyWebhook(req) {
   const hmacHeader = req.get('X-Shopify-Hmac-Sha256');
   if (!hmacHeader || !req.rawBody) return false;
   const digest = crypto.createHmac('sha256', CLIENT_SECRET).update(req.rawBody).digest('base64');
+  // TEMPORARY DEBUG - log digest mismatch details to diagnose the "invalid HMAC" issue.
+  // Remove once resolved. Does not log the secret itself, only derived hash values and lengths.
+  if (digest !== hmacHeader) {
+    console.log('HMAC mismatch debug:', JSON.stringify({
+      computedDigest: digest,
+      receivedHeader: hmacHeader,
+      rawBodyLength: req.rawBody.length,
+      rawBodyIsBuffer: Buffer.isBuffer(req.rawBody),
+      clientSecretLength: CLIENT_SECRET.length,
+      contentType: req.get('Content-Type')
+    }));
+  }
   try { return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(hmacHeader)); }
   catch(e) { return false; } // length mismatch etc - treat as invalid rather than crashing
 }
